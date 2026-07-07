@@ -22,11 +22,11 @@ func TestReflogParsesRealRepo(t *testing.T) {
 
 	initRepo(t, dir)
 
-	writeFile(t, dir, "f.txt", "a\n")
-	runGit(t, dir, base, "add", "f.txt")
+	writeFile(t, dir, "a\n")
+	runGit(t, dir, base, "add", workFile)
 	runGit(t, dir, base, "commit", "-m", "first commit")
 
-	writeFile(t, dir, "f.txt", "a\nb\n")
+	writeFile(t, dir, "a\nb\n")
 	runGit(t, dir, base.Add(1*time.Hour), "commit", "-am", "second commit")
 
 	runGit(t, dir, base.Add(2*time.Hour), "commit", "--amend", "-m", "second commit (amended)")
@@ -127,9 +127,12 @@ func runGitEnv(t *testing.T, dir string, extraEnv []string, args ...string) {
 	}
 }
 
-func writeFile(t *testing.T, dir, name, content string) {
+// workFile is the single tracked file the gitexec tests create and mutate.
+const workFile = "f.txt"
+
+func writeFile(t *testing.T, dir, content string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, workFile), []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }

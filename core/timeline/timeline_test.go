@@ -101,9 +101,46 @@ func TestFromReflogPreservesOrderAndData(t *testing.T) {
 	}
 }
 
+func TestAttachOrphans(t *testing.T) {
+	events := FromReflog([]gitexec.ReflogEntry{
+		{Index: 0, Operation: "reset", Hash: "newhead"},
+		{Index: 1, Operation: "commit", Hash: "lostcommit"},
+		{Index: 2, Operation: "commit (initial)", Hash: "base"},
+	})
+
+	AttachOrphans(events, map[string]struct{}{"lostcommit": {}})
+
+	// The reset points at newhead but its previous value (lostcommit) is
+	// orphaned, so it should be attached there.
+	if got := events[0].Orphaned; len(got) != 1 || got[0] != "lostcommit" {
+		t.Errorf("reset event Orphaned = %v, want [lostcommit]", got)
+	}
+	// A plain commit cannot orphan anything.
+	if events[1].Orphaned != nil {
+		t.Errorf("commit event Orphaned = %v, want nil", events[1].Orphaned)
+	}
+	// The oldest entry has no previous value to consider.
+	if events[2].Orphaned != nil {
+		t.Errorf("oldest event Orphaned = %v, want nil", events[2].Orphaned)
+	}
+}
+
+func TestAttachOrphansIgnoresUnorphanedPrevious(t *testing.T) {
+	events := FromReflog([]gitexec.ReflogEntry{
+		{Index: 0, Operation: "reset", Hash: "newhead"},
+		{Index: 1, Operation: "commit", Hash: "stillreachable"},
+	})
+
+	// The previous value is not in the orphan set, so nothing is attached.
+	AttachOrphans(events, map[string]struct{}{"somethingelse": {}})
+	if events[0].Orphaned != nil {
+		t.Errorf("Orphaned = %v, want nil when previous value is not orphaned", events[0].Orphaned)
+	}
+}
+
 // TestFromReflogOnRealResetHard ties the parser and classifier together on a
 // real repository: the reset-hard scenario must surface a red reset as the most
-// recent event.
+// recent event, with the discarded commit attached as recoverable.
 func TestFromReflogOnRealResetHard(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH")
@@ -124,7 +161,8 @@ func TestFromReflogOnRealResetHard(t *testing.T) {
 		t.Fatalf("build reset-hard: %v", err)
 	}
 
-	entries, err := gitexec.New(built.Dir).Reflog(context.Background())
+	runner := gitexec.New(built.Dir)
+	entries, err := runner.Reflog(context.Background())
 	if err != nil {
 		t.Fatalf("Reflog: %v", err)
 	}
@@ -138,5 +176,16 @@ func TestFromReflogOnRealResetHard(t *testing.T) {
 	}
 	if events[0].Risk != RiskRed {
 		t.Errorf("most recent event Risk = %v, want %v", events[0].Risk, RiskRed)
+	}
+
+	orphans, err := runner.Orphans(context.Background())
+	if err != nil {
+		t.Fatalf("Orphans: %v", err)
+	}
+	AttachOrphans(events, orphans)
+
+	lost := built.Anchors["lost"]
+	if got := events[0].Orphaned; len(got) != 1 || got[0] != lost {
+		t.Errorf("reset event Orphaned = %v, want [%s]", got, lost)
 	}
 }

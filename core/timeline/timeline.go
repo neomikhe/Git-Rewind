@@ -95,6 +95,10 @@ type Event struct {
 	Kind Kind
 	// Risk is how dangerous that operation is to committed work.
 	Risk Risk
+	// Orphaned holds commit hashes this event made unreachable from any branch
+	// or tag but that still exist and can be recovered. It is populated by
+	// AttachOrphans; nil until then.
+	Orphaned []string
 }
 
 // FromReflog classifies reflog entries into timeline events, preserving the
@@ -106,6 +110,47 @@ func FromReflog(entries []gitexec.ReflogEntry) []Event {
 		events[i] = Event{Entry: entry, Kind: kind, Risk: riskOf(kind)}
 	}
 	return events
+}
+
+// AttachOrphans links each history-rewriting event to the commit tip it made
+// unreachable, when that tip appears in the orphan set (as returned by
+// gitexec.Orphans). The orphaned tip is the ref's previous value — the hash
+// recorded by the next-older reflog entry — because consecutive HEAD reflog
+// entries chain. Events keep their reflog order; the input slice is modified in
+// place.
+func AttachOrphans(events []Event, orphans map[string]struct{}) {
+	for i := range events {
+		if !canOrphan(events[i].Kind) {
+			continue
+		}
+		prev, ok := previousValue(events, i)
+		if !ok || prev == events[i].Entry.Hash {
+			continue
+		}
+		if _, isOrphan := orphans[prev]; isOrphan {
+			events[i].Orphaned = append(events[i].Orphaned, prev)
+		}
+	}
+}
+
+// canOrphan reports whether a kind can leave a previously referenced commit
+// unreachable.
+func canOrphan(kind Kind) bool {
+	switch kind {
+	case KindReset, KindAmend, KindRebase:
+		return true
+	default:
+		return false
+	}
+}
+
+// previousValue returns the ref value in effect before event i — the hash of the
+// next-older reflog entry — or false when i is the oldest entry.
+func previousValue(events []Event, i int) (string, bool) {
+	if i+1 >= len(events) {
+		return "", false
+	}
+	return events[i+1].Entry.Hash, true
 }
 
 // classify maps a reflog operation label (the text before the first colon, such
