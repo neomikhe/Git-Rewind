@@ -7,26 +7,33 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"os"
+
+	"github.com/neomikhe/git-rewind/core/gitexec"
+	"github.com/neomikhe/git-rewind/tui"
 )
 
-// version is the build version. It is overridden at release time via
-// -ldflags "-X main.version=<tag>".
-var version = "dev"
-
 func main() {
-	if err := run(os.Args[1:]); err != nil {
+	if err := run(".", os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "git-rewind:", err)
 		os.Exit(1)
 	}
 }
 
-// run holds the real entrypoint logic, kept separate from main so it can be
-// tested and so the process exits from a single place.
-func run(_ []string) error {
-	// TODO(phase 3): parse flags and subcommands, then launch the TUI.
-	fmt.Printf("git-rewind %s\n", version)
-	fmt.Println("scaffold ready — timeline and rescue recipes coming soon.")
-	return nil
+// run loads the reflog for the repository at dir and shows it in the timeline
+// TUI. When there is no history yet, it prints a short notice to stdout instead
+// of launching the interactive view.
+func run(dir string, stdout io.Writer) error {
+	entries, err := gitexec.New(dir).Reflog(context.Background())
+	if err != nil {
+		return err
+	}
+	if len(entries) == 0 {
+		_, err := fmt.Fprintln(stdout, "git-rewind: no repository history to show yet.")
+		return err
+	}
+	return tui.Run(entries)
 }
