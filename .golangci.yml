@@ -1,0 +1,28 @@
+# golangci-lint v2 configuration.
+# Install: https://golangci-lint.run/  ·  Run: golangci-lint run
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  # The default set (errcheck, govet, ineffassign, staticcheck, unused) stays on.
+  # These extras are added deliberately; gosec matters most here because this
+  # tool shells out to the system git binary.
+  enable:
+    - gosec       # security analysis (subprocess, file perms, etc.)
+    - revive      # style and best-practice rules
+    - misspell    # spelling in comments and strings
+    - gocritic    # opinionated correctness/style diagnostics
+    - unconvert   # unnecessary type conversions
+    - unparam     # unused function parameters
+    - bodyclose   # unclosed response bodies
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/neomikhe/git-rewind
