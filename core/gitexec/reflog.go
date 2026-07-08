@@ -80,6 +80,15 @@ func (r *Runner) Reflog(ctx context.Context) ([]ReflogEntry, error) {
 	return parseReflog(out)
 }
 
+// Run executes an arbitrary git command in the repository and returns its
+// standard output verbatim. Prefer the typed reads (Reflog, Orphans) where they
+// apply; mutating operations should go through the safety package so backups and
+// dry-run are enforced.
+func (r *Runner) Run(ctx context.Context, args ...string) (string, error) {
+	out, err := r.run(ctx, args...)
+	return string(out), err
+}
+
 // hasCommits reports whether HEAD resolves to a commit. It is false for a
 // repository whose current branch is still unborn (no commits yet). The
 // exit-code check is language-independent: "git rev-parse --verify --quiet HEAD"
