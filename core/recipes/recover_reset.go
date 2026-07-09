@@ -38,5 +38,6 @@ func (RecoverAfterResetHard) Detect(_ context.Context, repo *Repo) (*safety.Plan
 		Warnings: []string{
 			"Moves your branch back to the recovered commit, replacing the current state (which is saved to the backup branch first). Any uncommitted changes are discarded.",
 		},
+		DiscardsChanges: true,
 	}, nil
 }

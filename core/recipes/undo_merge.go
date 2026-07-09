@@ -33,6 +33,7 @@ func (UndoMerge) Detect(ctx context.Context, repo *Repo) (*safety.Plan, error) {
 		Warnings: []string{
 			"Undoes the merge, restoring the state before it (saved to the backup branch first). Any uncommitted changes are discarded.",
 		},
+		DiscardsChanges: true,
 	}, nil
 }
 
@@ -69,5 +70,6 @@ func (UndoRebase) Detect(_ context.Context, repo *Repo) (*safety.Plan, error) {
 		Warnings: []string{
 			"Discards the rebased commits and restores the pre-rebase tip (saved to the backup branch first). Any uncommitted changes are discarded.",
 		},
+		DiscardsChanges: true,
 	}, nil
 }

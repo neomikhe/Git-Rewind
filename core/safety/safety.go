@@ -28,6 +28,11 @@ type Command struct {
 type Plan struct {
 	Commands []Command
 	Warnings []string
+	// DiscardsChanges is true when carrying out the plan overwrites the working
+	// tree (for example a reset --hard), so uncommitted changes — which the
+	// backup does not capture — would be lost. Callers use it to guard against a
+	// dirty working tree.
+	DiscardsChanges bool
 }
 
 // Preview renders each command exactly as it would be run ("git reset --hard
