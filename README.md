@@ -106,6 +106,24 @@ y: apply  |  esc: back  |  q: quit  |  ?: help
 there. On a very large repository the timeline loads the most recent events first and offers
 `m` to load older ones.
 
+## What state am I actually in?
+
+When you are not sure anything is wrong, `git rewind explain` says so in four lines:
+
+```console
+$ git rewind explain
+Repository state
+
+  HEAD          on branch main at 9665e14
+  Working tree  1 uncommitted change — a backup branch does not preserve these
+  Last event    just now  Reset the branch to HEAD~1 (1 commit left unreachable, recoverable)
+  Unreachable   1 commit no branch or tag reaches, still recoverable
+
+Something can be undone: Recover commits discarded by reset --hard
+  "git rewind" reviews it interactively; "git rewind last" prints the exact commands.
+  "git rewind find <text>" searches the unreachable commits for lost work.
+```
+
 ## Finding work you cannot even name
 
 Sometimes you do not know *which* commit you lost — only that it had a function in it. `git
@@ -161,6 +179,7 @@ Linux, macOS and Windows are all supported and all tested in CI.
 | `git rewind last --yes` | Apply that rescue. A backup branch is created first. |
 | `git rewind last --yes --force` | Also allow it when the rescue would discard uncommitted changes. |
 | `git rewind find "<text>"` | Search unreachable commits by message and file contents. Read-only. |
+| `git rewind explain` | Diagnose the repository right now: HEAD, working tree, last event, what is recoverable. Read-only. |
 | `git rewind version` | Print the version, commit and platform — worth including in bug reports. |
 
 ## What it can rescue
@@ -172,6 +191,7 @@ Linux, macOS and Windows are all supported and all tested in CI.
 | Undo a rebase | A rebase rewrote the branch and the old tip survives |
 | Undo a merge | `HEAD` is the merge commit you just made |
 | Restore a deleted branch | A branch you left no longer exists, but its tip does |
+| Restore a dropped stash | A `git stash drop` left a stash that git has not collected yet |
 | Undo the last commit, keeping the changes | `reset --soft`, changes stay staged |
 | Undo the last commit, discarding the changes | `reset --hard`, with the warning it deserves |
 
@@ -198,7 +218,7 @@ convention:
   using plumbing commands and stable `--format` output. There is no bespoke object-database
   code that could corrupt a repository.
 
-Backing that up: **7 rescues, 7 reproducible broken-repository fixtures**, and a test suite
+Backing that up: **8 rescues, 7 reproducible broken-repository fixtures**, and a test suite
 that builds real repositories in real breakage — `reset --hard`, amend, deleted branch,
 rewriting rebase, merge, detached HEAD, dropped stash — and asserts each rescue actually
 fixes them. CI runs the whole suite on Linux, macOS and Windows on every push, with the race

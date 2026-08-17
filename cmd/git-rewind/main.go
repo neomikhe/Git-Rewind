@@ -46,10 +46,12 @@ func run(args []string, dir string, stdout io.Writer) error {
 			return runLast(args[1:], dir, stdout)
 		case "find":
 			return runFind(args[1:], dir, stdout)
+		case "explain":
+			return runExplain(args[1:], dir, stdout)
 		case "version", "--version", "-v":
 			return flush(stdout, versionLine())
 		default:
-			return fmt.Errorf("unknown command %q (try \"git rewind\", \"git rewind last\", \"git rewind find\" or \"git rewind version\")", args[0])
+			return fmt.Errorf("unknown command %q (try \"git rewind\", or its \"last\", \"find\", \"explain\" and \"version\" subcommands)", args[0])
 		}
 	}
 

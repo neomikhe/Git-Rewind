@@ -10,7 +10,8 @@ import (
 
 func TestParseCommit(t *testing.T) {
 	hash := strings.Repeat("a", 40)
-	raw := strings.Join([]string{hash, "Ada Lovelace", "1767286800", "add the parser", "with a longer\nbody\n"}, unitSep)
+	parents := strings.Repeat("b", 40) + " " + strings.Repeat("c", 40)
+	raw := strings.Join([]string{hash, parents, "Ada Lovelace", "1767286800", "add the parser", "with a longer\nbody\n"}, unitSep)
 
 	got, err := parseCommit(raw + "\n")
 	if err != nil {
@@ -18,6 +19,9 @@ func TestParseCommit(t *testing.T) {
 	}
 	if got.Hash != hash || got.Author != "Ada Lovelace" || got.Subject != "add the parser" {
 		t.Errorf("parseCommit = %+v", got)
+	}
+	if len(got.Parents) != 2 || got.Parents[0] != strings.Repeat("b", 40) {
+		t.Errorf("Parents = %v, want the two parent hashes", got.Parents)
 	}
 	if want := time.Unix(1767286800, 0).UTC(); !got.When.Equal(want) {
 		t.Errorf("When = %s, want %s", got.When, want)
@@ -30,7 +34,7 @@ func TestParseCommit(t *testing.T) {
 func TestParseCommitRejectsMalformed(t *testing.T) {
 	cases := map[string]string{
 		"too few fields": "onlyhash" + unitSep + "Ada",
-		"bad time":       strings.Join([]string{"h", "Ada", "notanumber", "subject", ""}, unitSep),
+		"bad time":       strings.Join([]string{"h", "", "Ada", "notanumber", "subject", ""}, unitSep),
 	}
 	for name, raw := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -128,5 +132,42 @@ func TestCommitMetaAndGrepOnRealRepo(t *testing.T) {
 	}
 	if len(literal) != 0 {
 		t.Errorf("the query must be matched literally, not as a regular expression: %+v", literal)
+	}
+}
+
+func TestHeadState(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH")
+	}
+
+	dir := t.TempDir()
+	base := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	initRepo(t, dir)
+	writeFile(t, dir, "one\n")
+	runGit(t, dir, base, "add", workFile)
+	runGit(t, dir, base, "commit", "-m", "first commit")
+
+	ctx := context.Background()
+	r := New(dir)
+
+	attached, err := r.HeadState(ctx)
+	if err != nil {
+		t.Fatalf("HeadState: %v", err)
+	}
+	if attached.Detached || attached.Branch != "main" || len(attached.Hash) != 40 {
+		t.Errorf("HeadState = %+v, want main, attached", attached)
+	}
+
+	runGit(t, dir, base.Add(time.Hour), "checkout", "-q", attached.Hash)
+
+	detached, err := r.HeadState(ctx)
+	if err != nil {
+		t.Fatalf("HeadState detached: %v", err)
+	}
+	if !detached.Detached || detached.Branch != "" {
+		t.Errorf("HeadState = %+v, want detached with no branch", detached)
+	}
+	if detached.Hash != attached.Hash {
+		t.Errorf("Hash = %s, want the same commit %s", detached.Hash, attached.Hash)
 	}
 }

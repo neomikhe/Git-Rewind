@@ -13,14 +13,15 @@ import (
 )
 
 const (
-	commitFormat = "%H" + unitSep + "%an" + unitSep + "%at" + unitSep + "%s" + unitSep + "%b"
-	commitFields = 5
+	commitFormat = "%H" + unitSep + "%P" + unitSep + "%an" + unitSep + "%at" + unitSep + "%s" + unitSep + "%b"
+	commitFields = 6
 	grepFields   = 3
 )
 
 // Commit is a commit's identifying metadata, whether or not any ref reaches it.
 type Commit struct {
 	Hash    string
+	Parents []string
 	Author  string
 	When    time.Time
 	Subject string
@@ -67,17 +68,18 @@ func parseCommit(out string) (Commit, error) {
 		return Commit{}, fmt.Errorf("commit metadata: expected %d fields, got %d", commitFields, len(fields))
 	}
 
-	secs, err := strconv.ParseInt(fields[2], 10, 64)
+	secs, err := strconv.ParseInt(fields[3], 10, 64)
 	if err != nil {
-		return Commit{}, fmt.Errorf("commit %s: invalid author time %q: %w", fields[0], fields[2], err)
+		return Commit{}, fmt.Errorf("commit %s: invalid author time %q: %w", fields[0], fields[3], err)
 	}
 
 	return Commit{
 		Hash:    fields[0],
-		Author:  fields[1],
+		Parents: strings.Fields(fields[1]),
+		Author:  fields[2],
 		When:    time.Unix(secs, 0).UTC(),
-		Subject: fields[3],
-		Body:    strings.TrimSpace(fields[4]),
+		Subject: fields[4],
+		Body:    strings.TrimSpace(fields[5]),
 	}, nil
 }
 

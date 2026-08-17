@@ -33,6 +33,7 @@ func All() []Recipe {
 		RestoreDeletedBranch{},
 		UndoMerge{},
 		UndoRebase{},
+		RestoreDroppedStash{},
 		UndoLastCommit{},
 		UndoLastCommitHard{},
 	}

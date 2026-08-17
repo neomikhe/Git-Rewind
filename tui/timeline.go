@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -14,7 +13,6 @@ import (
 const (
 	chromeHeight  = 4
 	shortHashLen  = 7
-	hoursPerDay   = 24
 	minVisibleRow = 1
 	riskCellWidth = 8
 )
@@ -51,7 +49,7 @@ func (m model) timelineTitle() string {
 func (m model) renderRow(i int) string {
 	e := m.session.Events[i]
 
-	head := fmt.Sprintf("%-10s %5s  ", selectorOf(e.Entry), relativeTime(e.Entry.Time, m.now))
+	head := fmt.Sprintf("%-10s %5s  ", selectorOf(e.Entry), timeline.RelativeTime(e.Entry.Time, m.now))
 	tail := fmt.Sprintf("%s  %s", shortHash(e.Entry.Hash), e.Describe())
 
 	marker := "  "
@@ -111,26 +109,4 @@ func shortHash(hash string) string {
 		return hash[:shortHashLen]
 	}
 	return hash
-}
-
-func relativeTime(t, now time.Time) string {
-	d := now.Sub(t)
-	switch {
-	case d < time.Minute:
-		return "now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	case d < hoursPerDay*time.Hour:
-		return fmt.Sprintf("%dh", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%dd", int(d.Hours()/hoursPerDay))
-	}
-}
-
-func agoPhrase(t, now time.Time) string {
-	rel := relativeTime(t, now)
-	if rel == "now" {
-		return "just now"
-	}
-	return rel + " ago"
 }

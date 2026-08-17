@@ -79,28 +79,6 @@ func TestTimelineWindowKeepsCursorVisible(t *testing.T) {
 	}
 }
 
-func TestRelativeTime(t *testing.T) {
-	now := time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC)
-	cases := []struct {
-		name string
-		t    time.Time
-		want string
-	}{
-		{"seconds ago", now.Add(-30 * time.Second), "now"},
-		{"minutes ago", now.Add(-5 * time.Minute), "5m"},
-		{"hours ago", now.Add(-3 * time.Hour), "3h"},
-		{"days ago", now.Add(-48 * time.Hour), "2d"},
-		{"future clamps", now.Add(1 * time.Hour), "now"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if got := relativeTime(c.t, now); got != c.want {
-				t.Errorf("relativeTime = %q, want %q", got, c.want)
-			}
-		})
-	}
-}
-
 func TestRiskCellKeepsAFixedVisibleWidth(t *testing.T) {
 	for _, r := range []timeline.Risk{timeline.RiskGreen, timeline.RiskYellow, timeline.RiskRed} {
 		if got := lipgloss.Width(riskCell(r)); got != riskCellWidth {
@@ -130,16 +108,6 @@ func TestRiskLabelSurvivesWithoutColour(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("view is missing the %q text label; colour must not be the only risk signal", want)
 		}
-	}
-}
-
-func TestAgoPhrase(t *testing.T) {
-	now := time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC)
-	if got := agoPhrase(now.Add(-10*time.Second), now); got != "just now" {
-		t.Errorf("agoPhrase = %q, want %q", got, "just now")
-	}
-	if got := agoPhrase(now.Add(-3*time.Hour), now); got != "3h ago" {
-		t.Errorf("agoPhrase = %q, want %q", got, "3h ago")
 	}
 }
 

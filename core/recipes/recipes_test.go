@@ -52,6 +52,69 @@ func TestUndoLastCommitHardKeepsParent(t *testing.T) {
 	}
 }
 
+func TestRestoreDroppedStashPutsItBackWithoutTouchingTheTree(t *testing.T) {
+	built := buildScenario(t, "dropped-stash")
+	repo := loadRepo(t, built.Dir)
+
+	before := revParse(t, repo.Git, "HEAD")
+	runRecipe(t, repo, RestoreDroppedStash{})
+
+	list, err := repo.Git.Run(context.Background(), "stash", "list")
+	if err != nil {
+		t.Fatalf("stash list: %v", err)
+	}
+	if strings.TrimSpace(list) == "" {
+		t.Fatal("the stash list is still empty after the rescue")
+	}
+	if got := revParse(t, repo.Git, "stash@{0}"); got != built.Anchors["stash"] {
+		t.Errorf("stash@{0} = %s, want the dropped stash %s", got, built.Anchors["stash"])
+	}
+	if head := revParse(t, repo.Git, "HEAD"); head != before {
+		t.Errorf("restoring a stash moved HEAD from %s to %s", before, head)
+	}
+
+	status, err := repo.Git.Run(context.Background(), "status", "--porcelain")
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	if strings.TrimSpace(status) != "" {
+		t.Errorf("restoring a stash must not touch the working tree, got:\n%s", status)
+	}
+}
+
+func TestRestoreDroppedStashDoesNotApplyWithoutOne(t *testing.T) {
+	dir, _ := twoCommitRepo(t)
+	repo := loadRepo(t, dir)
+
+	plan, err := RestoreDroppedStash{}.Detect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Detect: %v", err)
+	}
+	if plan != nil {
+		t.Error("restore-dropped-stash applied to a repository with no dropped stash")
+	}
+}
+
+func TestLooksLikeStashNeedsBothParentsAndSubject(t *testing.T) {
+	cases := []struct {
+		name   string
+		commit gitexec.Commit
+		want   bool
+	}{
+		{"stash created with a message", gitexec.Commit{Parents: []string{"a", "b"}, Subject: "On main: work"}, true},
+		{"stash created without one", gitexec.Commit{Parents: []string{"a", "b"}, Subject: "WIP on main: 1234 base"}, true},
+		{"a plain merge commit", gitexec.Commit{Parents: []string{"a", "b"}, Subject: "Merge branch feature"}, false},
+		{"an ordinary commit that starts like a stash", gitexec.Commit{Parents: []string{"a"}, Subject: "On main: not a stash"}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := looksLikeStash(c.commit); got != c.want {
+				t.Errorf("looksLikeStash = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
 func TestUndoAmendRestoresOriginal(t *testing.T) {
 	built := buildScenario(t, "amend")
 	repo := loadRepo(t, built.Dir)

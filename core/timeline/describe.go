@@ -3,7 +3,33 @@ package timeline
 import (
 	"fmt"
 	"strings"
+	"time"
 )
+
+const hoursPerDay = 24
+
+// RelativeTime renders how long before now something happened, compactly: now, 5m, 3h, 2d.
+func RelativeTime(t, now time.Time) string {
+	d := now.Sub(t)
+	switch {
+	case d < time.Minute:
+		return "now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < hoursPerDay*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd", int(d.Hours()/hoursPerDay))
+	}
+}
+
+// AgoPhrase renders RelativeTime as a phrase: "just now", "3h ago".
+func AgoPhrase(t, now time.Time) string {
+	if rel := RelativeTime(t, now); rel != "now" {
+		return rel + " ago"
+	}
+	return "just now"
+}
 
 // Describe returns a plain-language description of the event and what it left recoverable.
 func (e Event) Describe() string {

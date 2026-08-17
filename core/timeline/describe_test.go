@@ -3,9 +3,42 @@ package timeline
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/neomikhe/git-rewind/core/gitexec"
 )
+
+func TestRelativeTime(t *testing.T) {
+	now := time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name string
+		t    time.Time
+		want string
+	}{
+		{"seconds ago", now.Add(-30 * time.Second), "now"},
+		{"minutes ago", now.Add(-5 * time.Minute), "5m"},
+		{"hours ago", now.Add(-3 * time.Hour), "3h"},
+		{"days ago", now.Add(-48 * time.Hour), "2d"},
+		{"future clamps", now.Add(1 * time.Hour), "now"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := RelativeTime(c.t, now); got != c.want {
+				t.Errorf("RelativeTime = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestAgoPhrase(t *testing.T) {
+	now := time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC)
+	if got := AgoPhrase(now.Add(-10*time.Second), now); got != "just now" {
+		t.Errorf("AgoPhrase = %q, want %q", got, "just now")
+	}
+	if got := AgoPhrase(now.Add(-3*time.Hour), now); got != "3h ago" {
+		t.Errorf("AgoPhrase = %q, want %q", got, "3h ago")
+	}
+}
 
 func TestDescribe(t *testing.T) {
 	cases := []struct {
