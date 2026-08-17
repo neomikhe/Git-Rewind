@@ -101,6 +101,49 @@ func TestFromReflogPreservesOrderAndData(t *testing.T) {
 	}
 }
 
+// TestKindAndRiskNamesAreStable guards the strings that reach --json consumers: they are
+// enum values, not prose, so a rename is a breaking change rather than a wording tweak.
+func TestKindAndRiskNamesAreStable(t *testing.T) {
+	kinds := map[Kind]string{
+		KindOther:         "other",
+		KindCommit:        "commit",
+		KindInitialCommit: "initial-commit",
+		KindAmend:         "amend",
+		KindReset:         "reset",
+		KindCheckout:      "checkout",
+		KindMerge:         "merge",
+		KindRebase:        "rebase",
+		KindPull:          "pull",
+		KindBranch:        "branch",
+		KindClone:         "clone",
+		KindCherryPick:    "cherry-pick",
+		KindRevert:        "revert",
+	}
+	seen := make(map[string]Kind, len(kinds))
+	for kind, want := range kinds {
+		if got := kind.String(); got != want {
+			t.Errorf("Kind(%d).String() = %q, want %q", int(kind), got, want)
+		}
+		if previous, duplicate := seen[want]; duplicate {
+			t.Errorf("kinds %d and %d share the name %q", int(kind), int(previous), want)
+		}
+		seen[want] = kind
+	}
+	if got := Kind(len(kinds) + 1).String(); got != "other" {
+		t.Errorf("an unknown Kind renders %q, want the safe fallback %q", got, "other")
+	}
+
+	risks := map[Risk]string{RiskGreen: "green", RiskYellow: "yellow", RiskRed: "red"}
+	for risk, want := range risks {
+		if got := risk.String(); got != want {
+			t.Errorf("Risk(%d).String() = %q, want %q", int(risk), got, want)
+		}
+	}
+	if got := Risk(99).String(); got != "unknown" {
+		t.Errorf("an unknown Risk renders %q, want %q", got, "unknown")
+	}
+}
+
 func TestAttachOrphans(t *testing.T) {
 	events := FromReflog([]gitexec.ReflogEntry{
 		{Index: 0, Operation: "reset", Hash: "newhead"},

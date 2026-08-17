@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -57,6 +58,53 @@ func TestLoadFromRejectsMalformedJSON(t *testing.T) {
 	}
 	if _, err := LoadFrom(path); err == nil {
 		t.Error("expected an error for malformed JSON")
+	}
+}
+
+// TestLoadAndSaveUseTheUserConfigDir exercises the entry points the CLI actually calls, by
+// pointing the OS configuration directory at a temporary one. os.UserConfigDir reads AppData
+// on Windows and XDG_CONFIG_HOME/HOME elsewhere, so all three are set.
+func TestLoadAndSaveUseTheUserConfigDir(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AppData", dir)
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("HOME", dir)
+
+	path, err := Path()
+	if err != nil {
+		t.Fatalf("Path: %v", err)
+	}
+	if !strings.HasPrefix(path, dir) {
+		t.Fatalf("Path = %q, want it inside %q", path, dir)
+	}
+
+	empty, err := Load()
+	if err != nil {
+		t.Fatalf("Load before any save must return defaults: %v", err)
+	}
+	if empty.Language != "" {
+		t.Errorf("Language = %q, want empty", empty.Language)
+	}
+
+	if err := Save(Config{Language: "es"}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	got, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Language != "es" {
+		t.Errorf("Language = %q, want es", got.Language)
+	}
+}
+
+func TestLoadFromRejectsAnOversizedFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, make([]byte, maxFileSize+1), filePerm); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadFrom(path); err == nil {
+		t.Error("expected an error for a file past the size cap")
 	}
 }
 

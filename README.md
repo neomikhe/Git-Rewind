@@ -286,14 +286,36 @@ type Recipe interface {
 }
 ```
 
-To add one: write a fixture in `internal/scenario` that reproduces the mistake, implement
-`Detect` to return a plan (or a nil plan when it does not apply), register it in `All()`, and
-add an integration test that builds the broken repository, applies the rescue and verifies
-the result. A rescue without that test will not be merged — the test suite is the reason
-anyone should trust this tool with their repository.
+A recipe **detects and describes; it never executes**. It returns a `Plan` — commands,
+warnings, and whether the working tree would be overwritten — and the safety layer runs it,
+after creating the backup branch. That split is what makes a contributed rescue safe to
+trust.
+
+Four steps:
+
+1. **Add a fixture** in `internal/scenario` that reproduces the mistake, with a `Verify` that
+   asserts the damage is real *and* the lost work still exists.
+2. **Implement `Detect`.** Return `(nil, nil)` when the recipe does not apply. Key it so the
+   plan can only ever affect the branch where the mistake happened — most rescues require the
+   mistake to be the most recent reflog event, precisely so a rescue can never reset an
+   unrelated branch after a checkout.
+3. **Register it in `All()`**, ordered so specific, evidence-based recoveries come before
+   generic offers.
+4. **Write the integration test**: build the broken repository, apply the rescue, assert it
+   is actually repaired.
+
+Titles and warnings go through `core/i18n`, so a new recipe needs an English and a Spanish
+message; a missing one fails the catalogue test.
+
+Two suites then check the work automatically. `TestEveryPlanHonoursTheSafetyContract` runs
+every recipe against every fixture and rejects a plan with no commands, a command with no
+explanation, a plan with no warning, or — most importantly — **a plan that overwrites the
+working tree without declaring `DiscardsChanges`**, which is what stops the dirty-tree guard
+from silently letting a rescue destroy uncommitted work.
 
 ```bash
 go test ./...            # the full suite
+go test -cover ./...     # coverage
 golangci-lint run ./...  # lint (gosec included)
 ```
 
