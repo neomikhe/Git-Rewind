@@ -15,7 +15,7 @@ func (m model) detailView() string {
 	b.WriteString("\n\n")
 	b.WriteString(field("When", fmt.Sprintf("%s (%s)", e.Entry.Time.Format("2006-01-02 15:04:05 MST"), agoPhrase(e.Entry.Time, m.now))))
 	b.WriteString(field("Kind", e.Kind.String()))
-	b.WriteString(field("Risk", e.Risk.String()))
+	b.WriteString(field("Risk", riskStyle(e.Risk).Render(e.Risk.String())))
 	b.WriteString(field("Commit", shortHash(e.Entry.Hash)))
 	b.WriteString(field("Who", e.Entry.ActorName))
 	b.WriteString(field("What", e.Describe()))
@@ -28,7 +28,7 @@ func (m model) detailView() string {
 		}
 	}
 
-	b.WriteString(m.footer("enter: available rescues  |  esc: back  |  q: quit"))
+	b.WriteString(m.footer())
 	return b.String()
 }
 
@@ -49,10 +49,10 @@ func (m model) rescuesView() string {
 	}
 
 	if m.dirty {
-		b.WriteString("\n  ! You have uncommitted changes. A backup branch does not preserve them.\n")
+		b.WriteString("\n" + warnStyle.Render("  ! You have uncommitted changes. A backup branch does not preserve them.") + "\n")
 	}
 
-	b.WriteString(m.footer("up/down: move  |  enter: review the commands  |  esc: back  |  q: quit"))
+	b.WriteString(m.footer())
 	return b.String()
 }
 

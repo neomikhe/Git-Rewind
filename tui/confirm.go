@@ -7,7 +7,6 @@ func (m model) confirmView() string {
 		return m.rescuesView()
 	}
 	selected := m.rescues[m.choice]
-	discardsUncommitted := selected.plan.DiscardsChanges && m.dirty
 
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("Rescue: " + selected.recipe.Title()))
@@ -24,14 +23,11 @@ func (m model) confirmView() string {
 	for _, warning := range selected.plan.Warnings {
 		b.WriteString("\n  " + warning + "\n")
 	}
-
-	help := "y: apply  |  esc: back  |  q: quit"
-	if discardsUncommitted {
-		b.WriteString("\n  ! You have uncommitted changes. They are NOT saved to the backup and would be lost.\n")
-		help = "f: apply and discard uncommitted changes  |  esc: back  |  q: quit"
+	if m.discardsUncommitted() {
+		b.WriteString("\n" + warnStyle.Render("  ! You have uncommitted changes. They are NOT saved to the backup and would be lost.") + "\n")
 	}
 
-	b.WriteString(m.footer(help))
+	b.WriteString(m.footer())
 	return b.String()
 }
 
@@ -49,6 +45,6 @@ func (m model) resultView() string {
 		b.WriteString("\n  Re-run git rewind to see the updated timeline.\n")
 	}
 
-	b.WriteString(m.footer("q: quit"))
+	b.WriteString(m.footer())
 	return b.String()
 }

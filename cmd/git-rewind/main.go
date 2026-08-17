@@ -20,6 +20,8 @@ import (
 	"github.com/neomikhe/git-rewind/tui"
 )
 
+const allEvents = 0
+
 func main() {
 	if err := run(os.Args[1:], ".", os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "git-rewind:", err)
@@ -38,14 +40,14 @@ func run(args []string, dir string, stdout io.Writer) error {
 	}
 
 	git := gitexec.New(dir)
-	events, err := timeline.Load(context.Background(), git)
+	events, err := timeline.Load(context.Background(), git, tui.PageSize)
 	if err != nil {
 		return err
 	}
 	if len(events) == 0 {
 		return flush(stdout, "git-rewind: no repository history to show yet.\n")
 	}
-	return tui.Run(tui.Session{Git: git, Events: events})
+	return tui.Run(tui.Session{Git: git, Events: events, Limit: tui.PageSize})
 }
 
 func runLast(args []string, dir string, stdout io.Writer) error {
@@ -59,7 +61,7 @@ func runLast(args []string, dir string, stdout io.Writer) error {
 
 	ctx := context.Background()
 	git := gitexec.New(dir)
-	events, err := timeline.Load(ctx, git)
+	events, err := timeline.Load(ctx, git, allEvents)
 	if err != nil {
 		return err
 	}

@@ -279,7 +279,7 @@ func buildScenario(t *testing.T, name string) scenario.Built {
 func loadRepo(t *testing.T, dir string) *Repo {
 	t.Helper()
 	git := gitexec.New(dir)
-	events, err := timeline.Load(context.Background(), git)
+	events, err := timeline.Load(context.Background(), git, 0)
 	if err != nil {
 		t.Fatalf("load timeline: %v", err)
 	}

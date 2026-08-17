@@ -59,8 +59,11 @@ git-rewind timeline (3 events)
   HEAD@{1}      5m  [green]  e205c73  Committed "second commit"
   HEAD@{2}      6m  [green]  945a801  Made the first commit "first commit"
 
-up/down or j/k: move  |  enter: details  |  q: quit
+up/down, j/k: move  |  enter: details  |  q, esc: quit  |  ?: help
 ```
+
+Red, yellow and green are colours in your terminal too — but the label is always there, so
+the risk is readable without them.
 
 Press `enter` on an event to see what it did and what it left behind:
 
@@ -78,7 +81,7 @@ Event HEAD@{0}
   Commits left unreachable but still recoverable
     e205c73
 
-enter: available rescues  |  esc: back  |  q: quit
+enter: rescues  |  esc: back  |  q: quit  |  ?: help
 ```
 
 Press `enter` again for the rescues that apply, and once more for the confirmation panel —
@@ -96,8 +99,12 @@ Will run:
   Moves your branch back to the recovered commit, replacing the current state (which is
   saved to the backup branch first). Any uncommitted changes are discarded.
 
-y: apply  |  esc: back  |  q: quit
+y: apply  |  esc: back  |  q: quit  |  ?: help
 ```
+
+`?` opens a help screen for whichever screen you are on, listing exactly the keys that work
+there. On a very large repository the timeline loads the most recent events first and offers
+`m` to load older ones.
 
 ## Install
 

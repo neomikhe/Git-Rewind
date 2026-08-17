@@ -45,7 +45,7 @@ func TestOrphansFindsResetHardCommit(t *testing.T) {
 	runGit(t, dir, base.Add(1*time.Hour), "commit", "-am", "second commit")
 
 	r := New(dir)
-	before, err := r.Reflog(context.Background())
+	before, err := r.Reflog(context.Background(), 0)
 	if err != nil {
 		t.Fatalf("Reflog: %v", err)
 	}

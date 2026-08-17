@@ -1,11 +1,13 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/neomikhe/git-rewind/core/gitexec"
 	"github.com/neomikhe/git-rewind/core/timeline"
@@ -38,7 +40,8 @@ func TestTimelineViewShowsClassifiedEvents(t *testing.T) {
 		"Switched from main to feature",
 		`Committed "first commit"`,
 		"enter: details",
-		"q: quit",
+		"q, esc: quit",
+		"?: help",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("timeline view is missing %q\n---\n%s", want, out)
@@ -95,6 +98,38 @@ func TestRelativeTime(t *testing.T) {
 				t.Errorf("relativeTime = %q, want %q", got, c.want)
 			}
 		})
+	}
+}
+
+func TestRiskCellKeepsAFixedVisibleWidth(t *testing.T) {
+	for _, r := range []timeline.Risk{timeline.RiskGreen, timeline.RiskYellow, timeline.RiskRed} {
+		if got := lipgloss.Width(riskCell(r)); got != riskCellWidth {
+			t.Errorf("risk cell for %s is %d columns wide, want %d — column alignment would break", r, got, riskCellWidth)
+		}
+	}
+}
+
+func TestEachRiskLevelHasItsOwnColour(t *testing.T) {
+	seen := make(map[string]timeline.Risk)
+	for _, r := range []timeline.Risk{timeline.RiskGreen, timeline.RiskYellow, timeline.RiskRed} {
+		style, ok := riskStyles[r]
+		if !ok {
+			t.Fatalf("no style defined for risk %s", r)
+		}
+		colour := fmt.Sprint(style.GetForeground())
+		if previous, duplicate := seen[colour]; duplicate {
+			t.Errorf("risk %s shares colour %q with %s", r, colour, previous)
+		}
+		seen[colour] = r
+	}
+}
+
+func TestRiskLabelSurvivesWithoutColour(t *testing.T) {
+	out := newModel(sampleSession()).View()
+	for _, want := range []string{"[red]", "[yellow]", "[green]"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("view is missing the %q text label; colour must not be the only risk signal", want)
+		}
 	}
 }
 

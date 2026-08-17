@@ -154,7 +154,7 @@ func TestFromReflogOnRealResetHard(t *testing.T) {
 	}
 
 	runner := gitexec.New(built.Dir)
-	entries, err := runner.Reflog(context.Background())
+	entries, err := runner.Reflog(context.Background(), 0)
 	if err != nil {
 		t.Fatalf("Reflog: %v", err)
 	}

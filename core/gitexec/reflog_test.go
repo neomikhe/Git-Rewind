@@ -32,7 +32,7 @@ func TestReflogParsesRealRepo(t *testing.T) {
 
 	runGit(t, dir, base.Add(4*time.Hour), "reset", "--hard", "HEAD~1")
 
-	entries, err := New(dir).Reflog(context.Background())
+	entries, err := New(dir).Reflog(context.Background(), 0)
 	if err != nil {
 		t.Fatalf("Reflog: %v", err)
 	}
@@ -83,12 +83,59 @@ func TestReflogEmptyRepo(t *testing.T) {
 	dir := t.TempDir()
 	initRepo(t, dir)
 
-	entries, err := New(dir).Reflog(context.Background())
+	entries, err := New(dir).Reflog(context.Background(), 0)
 	if err != nil {
 		t.Fatalf("Reflog: %v", err)
 	}
 	if len(entries) != 0 {
 		t.Fatalf("got %d entries, want 0: %+v", len(entries), entries)
+	}
+}
+
+func TestReflogLimitReturnsTheMostRecentEntries(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH")
+	}
+
+	dir := t.TempDir()
+	base := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	initRepo(t, dir)
+
+	writeFile(t, dir, "a\n")
+	runGit(t, dir, base, "add", workFile)
+	runGit(t, dir, base, "commit", "-m", "first commit")
+	writeFile(t, dir, "a\nb\n")
+	runGit(t, dir, base.Add(1*time.Hour), "commit", "-am", "second commit")
+	writeFile(t, dir, "a\nb\nc\n")
+	runGit(t, dir, base.Add(2*time.Hour), "commit", "-am", "third commit")
+
+	all, err := New(dir).Reflog(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("Reflog unlimited: %v", err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("got %d entries with no limit, want 3", len(all))
+	}
+
+	limited, err := New(dir).Reflog(context.Background(), 2)
+	if err != nil {
+		t.Fatalf("Reflog limited: %v", err)
+	}
+	if len(limited) != 2 {
+		t.Fatalf("got %d entries with limit 2, want 2", len(limited))
+	}
+	for i := range limited {
+		if limited[i].Hash != all[i].Hash || limited[i].Index != i {
+			t.Errorf("entry %d = %+v, want the most recent entry %+v", i, limited[i], all[i])
+		}
+	}
+
+	unbounded, err := New(dir).Reflog(context.Background(), -1)
+	if err != nil {
+		t.Fatalf("Reflog negative limit: %v", err)
+	}
+	if len(unbounded) != len(all) {
+		t.Errorf("a negative limit returned %d entries, want all %d", len(unbounded), len(all))
 	}
 }
 

@@ -77,7 +77,7 @@ func TestEnterOpensEventDetail(t *testing.T) {
 		"reset: moving to HEAD~1",
 		"Commits left unreachable but still recoverable",
 		shortHash(orphanHash),
-		"enter: available rescues",
+		"enter: rescues",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("detail view is missing %q\n---\n%s", want, out)
@@ -104,7 +104,7 @@ func TestRescuesScreenListsApplicableRescues(t *testing.T) {
 		"Available rescues (2)",
 		"Recover commits discarded by reset --hard",
 		"Undo the last commit (keep the changes)",
-		"enter: review the commands",
+		"enter: review",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("rescues view is missing %q\n---\n%s", want, out)
@@ -161,8 +161,11 @@ func TestConfirmRequiresForceWhenTreeIsDirty(t *testing.T) {
 	m := atRescues(t, []rescue{discardingRescue()}, true)
 	m = update(m, key("enter"))
 
-	if !strings.Contains(m.View(), "f: apply and discard uncommitted changes") {
+	if !strings.Contains(m.View(), "f: apply, discarding changes") {
 		t.Errorf("confirm view should require force on a dirty tree\n---\n%s", m.View())
+	}
+	if strings.Contains(m.View(), "y: apply") {
+		t.Errorf("confirm view must not offer y on a dirty tree\n---\n%s", m.View())
 	}
 
 	refused, cmd := m.Update(key("y"))
@@ -261,6 +264,121 @@ func TestEscQuitsFromTheTimeline(t *testing.T) {
 	}
 }
 
+func TestHelpOpensClosesAndIsContextual(t *testing.T) {
+	m := update(newModel(sampleSession()), key("?"))
+	if !m.help {
+		t.Fatal("? did not open the help")
+	}
+	out := m.View()
+	for _, want := range []string{"Keys", "timeline", "open the event detail", "backup/rewind-"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("timeline help is missing %q\n---\n%s", want, out)
+		}
+	}
+
+	if update(m, key("?")).help {
+		t.Error("? did not close the help")
+	}
+	if update(m, key("esc")).help {
+		t.Error("esc did not close the help")
+	}
+}
+
+func TestHelpShowsTheKeysOfTheCurrentScreen(t *testing.T) {
+	detail := update(update(newModel(sampleSession()), key("enter")), key("?"))
+	if !strings.Contains(detail.View(), "event detail") {
+		t.Errorf("help does not name the current screen\n---\n%s", detail.View())
+	}
+	if !strings.Contains(detail.View(), "list the rescues that apply") {
+		t.Errorf("detail help is missing its enter binding\n---\n%s", detail.View())
+	}
+
+	confirm := update(update(atRescues(t, []rescue{discardingRescue()}, true), key("enter")), key("?"))
+	if !strings.Contains(confirm.View(), "apply and discard your uncommitted changes") {
+		t.Errorf("confirm help must offer force on a dirty tree\n---\n%s", confirm.View())
+	}
+	if strings.Contains(confirm.View(), "apply this rescue") {
+		t.Errorf("confirm help must not offer y on a dirty tree\n---\n%s", confirm.View())
+	}
+}
+
+func TestHelpSwallowsNavigationButNotQuit(t *testing.T) {
+	m := update(newModel(sampleSession()), key("?"))
+
+	if moved := update(m, tea.KeyMsg{Type: tea.KeyDown}); moved.cursor != 0 {
+		t.Error("the timeline must not scroll behind an open help screen")
+	}
+	if opened := update(m, key("enter")); opened.screen != screenTimeline {
+		t.Error("enter must not navigate behind an open help screen")
+	}
+	if _, cmd := m.Update(key("q")); cmd == nil {
+		t.Error("q must still quit from the help screen")
+	}
+}
+
+func TestMoreEventsAreOfferedOnlyWhenThePageIsFull(t *testing.T) {
+	full := sampleSession()
+	full.Limit = len(full.Events)
+	m := newModel(full)
+	if !m.hasMore() {
+		t.Fatal("a full page must offer more events")
+	}
+	for _, want := range []string{"more available", "m: more"} {
+		if !strings.Contains(m.View(), want) {
+			t.Errorf("timeline is missing %q\n---\n%s", want, m.View())
+		}
+	}
+
+	partial := sampleSession()
+	partial.Limit = len(partial.Events) + 1
+	if newModel(partial).hasMore() {
+		t.Error("a partial page means everything is loaded")
+	}
+	if newModel(sampleSession()).hasMore() {
+		t.Error("an unlimited session can never have more to load")
+	}
+	if strings.Contains(newModel(partial).View(), "m: more") {
+		t.Error("the load-more hint must not appear when everything is loaded")
+	}
+}
+
+func TestLoadMoreKeyRequestsTheNextPageOnlyWhenThereIsOne(t *testing.T) {
+	full := sampleSession()
+	full.Limit = len(full.Events)
+
+	next, cmd := newModel(full).Update(key("m"))
+	if cmd == nil {
+		t.Fatal("m did not request more events")
+	}
+	if !next.(model).loading {
+		t.Error("the model should be loading while more events are fetched")
+	}
+
+	if _, cmd := newModel(sampleSession()).Update(key("m")); cmd != nil {
+		t.Error("m must do nothing when everything is already loaded")
+	}
+}
+
+func TestEventsMsgReplacesTheLoadedPage(t *testing.T) {
+	full := sampleSession()
+	full.Limit = len(full.Events)
+	m := newModel(full)
+	m.loading = true
+
+	grown := sampleSession().Events
+	m = update(m, eventsMsg{events: grown, limit: 2 * len(grown)})
+
+	if m.loading {
+		t.Error("loading should be cleared once the page arrives")
+	}
+	if m.session.Limit != 2*len(grown) {
+		t.Errorf("Limit = %d, want %d", m.session.Limit, 2*len(grown))
+	}
+	if m.hasMore() {
+		t.Error("a page that came back short means everything is loaded")
+	}
+}
+
 func TestDetectAndApplyOnBrokenRepo(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH")
@@ -268,7 +386,7 @@ func TestDetectAndApplyOnBrokenRepo(t *testing.T) {
 
 	built := buildScenario(t, "reset-hard")
 	git := gitexec.New(built.Dir)
-	events, err := timeline.Load(context.Background(), git)
+	events, err := timeline.Load(context.Background(), git, 0)
 	if err != nil {
 		t.Fatalf("timeline.Load: %v", err)
 	}

@@ -43,8 +43,9 @@ type ReflogEntry struct {
 	Operation  string
 }
 
-// Reflog returns the repository's reflog entries, most recent first; an unborn HEAD yields none.
-func (r *Runner) Reflog(ctx context.Context) ([]ReflogEntry, error) {
+// Reflog returns reflog entries, most recent first, at most limit of them when limit is
+// positive and all of them otherwise; an unborn HEAD yields none.
+func (r *Runner) Reflog(ctx context.Context, limit int) ([]ReflogEntry, error) {
 	born, err := r.hasCommits(ctx)
 	if err != nil {
 		return nil, err
@@ -53,7 +54,13 @@ func (r *Runner) Reflog(ctx context.Context) ([]ReflogEntry, error) {
 		return nil, nil
 	}
 
-	out, err := r.run(ctx, "reflog", "--date=unix", "--format="+reflogFormat)
+	args := []string{"reflog"}
+	if limit > 0 {
+		args = append(args, "-n", strconv.Itoa(limit))
+	}
+	args = append(args, "--date=unix", "--format="+reflogFormat)
+
+	out, err := r.run(ctx, args...)
 	if err != nil {
 		return nil, err
 	}
