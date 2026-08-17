@@ -1,0 +1,119 @@
+version: 2
+
+project_name: git-rewind
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: git-rewind
+    main: ./cmd/git-rewind
+    binary: git-rewind
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .FullCommit }}
+      - -X main.date={{ .CommitDate }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: git-rewind
+    ids:
+      - git-rewind
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^chore"
+      - "^ci"
+      - "^test"
+  groups:
+    - title: Features
+      regexp: "^feat"
+      order: 0
+    - title: Fixes
+      regexp: "^fix"
+      order: 1
+    - title: Documentation
+      regexp: "^docs"
+      order: 2
+    - title: Other
+      order: 99
+
+release:
+  prerelease: auto
+  footer: |
+    Install the binary as `git-rewind` anywhere on your PATH and Git will run it as
+    `git rewind`. Verify a download against `checksums.txt` before using it.
+
+# Homebrew and Scoop publishing is written and ready but not switched on: it pushes to
+# repositories that must exist first (neomikhe/homebrew-tap, neomikhe/scoop-bucket) using a
+# personal access token the release workflow does not have. With skip_upload the formula and
+# manifest are still generated into dist/ so they can be reviewed. See DOCUMENTATION.md §7.
+homebrew_casks:
+  - name: git-rewind
+    ids:
+      - git-rewind
+    binaries:
+      - git-rewind
+    repository:
+      owner: neomikhe
+      name: homebrew-tap
+    directory: Casks
+    homepage: https://github.com/neomikhe/git-rewind
+    description: Undo any Git mistake, with automatic backups
+    skip_upload: true
+    dependencies:
+      - formula: git
+    # Without this, Gatekeeper quarantines the unsigned binary and macOS refuses to run it.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/git-rewind"]
+          end
+
+scoops:
+  - name: git-rewind
+    ids:
+      - git-rewind
+    repository:
+      owner: neomikhe
+      name: scoop-bucket
+    homepage: https://github.com/neomikhe/git-rewind
+    description: Undo any Git mistake, with automatic backups
+    license: MIT
+    skip_upload: true
+    depends:
+      - git

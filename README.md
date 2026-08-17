@@ -124,7 +124,9 @@ Put the binary anywhere on your `PATH`. Because Git dispatches `git <name>` to a
 called `git-<name>`, **`git rewind` then works as a native subcommand** — no aliases, no
 configuration.
 
-Homebrew, Scoop and AUR packages are planned for the first tagged release.
+The first tagged release will also publish archives for Linux, macOS and Windows on amd64
+and arm64, with a `checksums.txt` (SHA-256) to verify them against, plus Homebrew and Scoop
+packages. Until then, the two commands above are the way in.
 
 **Requirements:** `git` on your `PATH` at runtime, and Go 1.26+ if you build from source.
 Linux, macOS and Windows are all supported and all tested in CI.
@@ -137,6 +139,7 @@ Linux, macOS and Windows are all supported and all tested in CI.
 | `git rewind last` | Print the rescue for the most recent mistake. Changes nothing. |
 | `git rewind last --yes` | Apply that rescue. A backup branch is created first. |
 | `git rewind last --yes --force` | Also allow it when the rescue would discard uncommitted changes. |
+| `git rewind version` | Print the version, commit and platform — worth including in bug reports. |
 
 ## What it can rescue
 

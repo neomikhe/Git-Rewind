@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -30,6 +31,24 @@ func TestRunEmptyRepoPrintsNotice(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "no repository history") {
 		t.Fatalf("unexpected output: %q", buf.String())
+	}
+}
+
+func TestVersionCommand(t *testing.T) {
+	for _, args := range [][]string{{"version"}, {"--version"}, {"-v"}} {
+		var buf bytes.Buffer
+		if err := run(args, ".", &buf); err != nil {
+			t.Fatalf("run %v: %v", args, err)
+		}
+		out := buf.String()
+		for _, want := range []string{"git-rewind", version, commit, date, runtime.GOOS, runtime.GOARCH} {
+			if !strings.Contains(out, want) {
+				t.Errorf("run %v output %q is missing %q", args, out, want)
+			}
+		}
+		if !strings.HasSuffix(out, "\n") {
+			t.Errorf("run %v output %q does not end in a newline", args, out)
+		}
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -21,6 +22,12 @@ import (
 )
 
 const allEvents = 0
+
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
 
 func main() {
 	if err := run(os.Args[1:], ".", os.Stdout); err != nil {
@@ -34,8 +41,10 @@ func run(args []string, dir string, stdout io.Writer) error {
 		switch args[0] {
 		case "last":
 			return runLast(args[1:], dir, stdout)
+		case "version", "--version", "-v":
+			return flush(stdout, versionLine())
 		default:
-			return fmt.Errorf("unknown command %q (try \"git rewind\" or \"git rewind last\")", args[0])
+			return fmt.Errorf("unknown command %q (try \"git rewind\", \"git rewind last\" or \"git rewind version\")", args[0])
 		}
 	}
 
@@ -125,6 +134,11 @@ func describePlan(recipe recipes.Recipe, plan *safety.Plan, dirtyRisk bool) stri
 		b.WriteString("\n  ! You have uncommitted changes. They are NOT saved to the backup and would be lost.\n")
 	}
 	return b.String()
+}
+
+func versionLine() string {
+	return fmt.Sprintf("git-rewind %s (commit %s, built %s, %s/%s)\n",
+		version, commit, date, runtime.GOOS, runtime.GOARCH)
 }
 
 func flush(w io.Writer, s string) error {
