@@ -106,6 +106,27 @@ y: apply  |  esc: back  |  q: quit  |  ?: help
 there. On a very large repository the timeline loads the most recent events first and offers
 `m` to load older ones.
 
+## Finding work you cannot even name
+
+Sometimes you do not know *which* commit you lost — only that it had a function in it. `git
+rewind find` searches every commit no branch or tag reaches, through both commit messages and
+the file contents at that commit:
+
+```console
+$ git rewind find "parseInvoiceTotal"
+Found 1 commit matching "parseInvoiceTotal", out of 1 commit no branch or tag reaches.
+
+  3afd6f3  2026-08-14 16:02  Ada Lovelace  "add the invoice parser I spent all afternoon on"
+      billing.go:3  func parseInvoiceTotal(raw string) (int, error) {
+      keep it with: git branch rescued/3afd6f3 3afd6f35362bccb63bd89457fdd133230e72f0f9
+
+That command only adds a branch pointing at the commit; nothing else changes.
+```
+
+The query is matched literally, so `parseInvoiceTotal()` searches for that text rather than
+being read as a regular expression. `--messages` restricts the search to commit messages,
+which is faster on very large repositories.
+
 ## Install
 
 ```bash
@@ -139,6 +160,7 @@ Linux, macOS and Windows are all supported and all tested in CI.
 | `git rewind last` | Print the rescue for the most recent mistake. Changes nothing. |
 | `git rewind last --yes` | Apply that rescue. A backup branch is created first. |
 | `git rewind last --yes --force` | Also allow it when the rescue would discard uncommitted changes. |
+| `git rewind find "<text>"` | Search unreachable commits by message and file contents. Read-only. |
 | `git rewind version` | Print the version, commit and platform — worth including in bug reports. |
 
 ## What it can rescue

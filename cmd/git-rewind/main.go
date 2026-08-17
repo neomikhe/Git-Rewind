@@ -21,7 +21,10 @@ import (
 	"github.com/neomikhe/git-rewind/tui"
 )
 
-const allEvents = 0
+const (
+	allEvents    = 0
+	shortHashLen = 7
+)
 
 var (
 	version = "dev"
@@ -41,10 +44,12 @@ func run(args []string, dir string, stdout io.Writer) error {
 		switch args[0] {
 		case "last":
 			return runLast(args[1:], dir, stdout)
+		case "find":
+			return runFind(args[1:], dir, stdout)
 		case "version", "--version", "-v":
 			return flush(stdout, versionLine())
 		default:
-			return fmt.Errorf("unknown command %q (try \"git rewind\", \"git rewind last\" or \"git rewind version\")", args[0])
+			return fmt.Errorf("unknown command %q (try \"git rewind\", \"git rewind last\", \"git rewind find\" or \"git rewind version\")", args[0])
 		}
 	}
 
