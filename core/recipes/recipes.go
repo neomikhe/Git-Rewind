@@ -20,10 +20,11 @@ type Repo struct {
 	Printer *i18n.Printer
 }
 
-// Say returns the repository's printer, defaulting to English when none was supplied.
+// Say returns the repository's printer, defaulting to English when none was supplied. It
+// does not cache the default, so concurrent Detect calls cannot race on the field.
 func (r *Repo) Say() *i18n.Printer {
 	if r.Printer == nil {
-		r.Printer = i18n.New(i18n.EN)
+		return i18n.New(i18n.EN)
 	}
 	return r.Printer
 }

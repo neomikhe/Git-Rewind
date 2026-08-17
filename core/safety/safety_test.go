@@ -2,6 +2,7 @@ package safety
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -120,6 +121,46 @@ func TestApplyExecutesAfterBackup(t *testing.T) {
 	}
 	if head := revParse(t, git, "HEAD"); head != first {
 		t.Errorf("HEAD is %s after reset, want %s", head, first)
+	}
+}
+
+// TestApplyNamesTheBackupWhenAPlanFailsPartway is the guard on git-rewind's core promise. A
+// rescue that dies halfway has already created the backup branch, and the user must be told
+// where it is — that is the exact moment they most need to know their work is safe.
+func TestApplyReportsTheBackupWhenAPlanFailsPartway(t *testing.T) {
+	dir, _, _ := twoCommitRepo(t)
+	git := gitexec.New(dir)
+
+	plan := Plan{
+		Commands: []Command{
+			{Args: []string{"branch", "applied-before-the-failure"}, Explain: "succeeds"},
+			{Args: []string{"branch", "--no-such-flag"}, Explain: "fails"},
+		},
+		Warnings: []string{"test plan"},
+	}
+
+	now := time.Date(2026, 7, 7, 14, 15, 0, 0, time.UTC)
+	res, err := Apply(context.Background(), git, plan, Options{Execute: true, Now: now})
+	if err == nil {
+		t.Fatal("expected the second command to fail")
+	}
+
+	var applyErr *ApplyError
+	if !errors.As(err, &applyErr) {
+		t.Fatalf("error is %T, want *ApplyError so callers can name the backup branch", err)
+	}
+	if applyErr.BackupBranch == "" || applyErr.BackupBranch != res.BackupBranch {
+		t.Errorf("ApplyError.BackupBranch = %q, Result.BackupBranch = %q; both must name the backup",
+			applyErr.BackupBranch, res.BackupBranch)
+	}
+	if !strings.Contains(applyErr.Error(), applyErr.BackupBranch) {
+		t.Errorf("the error text does not mention the backup branch: %q", applyErr.Error())
+	}
+	if !strings.Contains(applyErr.Command, "--no-such-flag") {
+		t.Errorf("ApplyError.Command = %q, want the command that failed", applyErr.Command)
+	}
+	if revParse(t, git, applyErr.BackupBranch) == "" {
+		t.Error("the backup branch named in the error does not resolve")
 	}
 }
 

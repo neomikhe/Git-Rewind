@@ -131,7 +131,7 @@ func runLast(args []string, dir string, stdout io.Writer, p *i18n.Printer) error
 
 	res, err := safety.Apply(ctx, git, *plan, safety.Options{Execute: true, Now: time.Now()})
 	if err != nil {
-		return err
+		return describeApplyFailure(p, err)
 	}
 	if *asJSON {
 		return writeJSON(stdout, lastResult(p, recipe, plan, status, false, res.BackupBranch))
@@ -166,6 +166,17 @@ func describePlan(p *i18n.Printer, recipe recipes.Recipe, plan *safety.Plan, dir
 		b.WriteString(p.T(i18n.LastDirtyWarning))
 	}
 	return b.String()
+}
+
+// describeApplyFailure keeps the backup branch in front of the user when a rescue dies
+// partway through. That is the one moment they most need to know their work is safe.
+func describeApplyFailure(p *i18n.Printer, err error) error {
+	var applyErr *safety.ApplyError
+	if !errors.As(err, &applyErr) {
+		return err
+	}
+	return fmt.Errorf(p.T(i18n.LastFailedWithBackup),
+		applyErr.Command, applyErr.Err, applyErr.BackupBranch)
 }
 
 func versionLine() string {

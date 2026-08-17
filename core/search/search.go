@@ -48,13 +48,17 @@ func Find(ctx context.Context, git *gitexec.Runner, query string, opts Options) 
 		return result, nil
 	}
 
-	orphans, err := git.Orphans(ctx)
+	tips, err := git.Orphans(ctx)
 	if err != nil {
 		return result, err
 	}
-	result.Orphans = len(orphans)
+	candidates, err := lostChains(ctx, git, tips)
+	if err != nil {
+		return result, err
+	}
+	result.Orphans = len(candidates)
 
-	commits, err := describeOrphans(ctx, git, orphans, opts.MaxCommits)
+	commits, err := describeOrphans(ctx, git, candidates, opts.MaxCommits)
 	if err != nil {
 		return result, err
 	}
@@ -89,20 +93,44 @@ func withDefaults(opts Options) Options {
 	return opts
 }
 
-func describeOrphans(ctx context.Context, git *gitexec.Runner, orphans map[string]struct{}, limit int) ([]gitexec.Commit, error) {
-	hashes := make([]string, 0, len(orphans))
-	for hash := range orphans {
-		hashes = append(hashes, hash)
+// lostChains expands each dangling tip into the whole run of commits below it that no branch
+// or tag reaches. fsck only reports the tips, so searching those alone would miss every
+// commit under them — and report work as gone when it is perfectly recoverable.
+func lostChains(ctx context.Context, git *gitexec.Runner, tips map[string]struct{}) ([]string, error) {
+	ordered := make([]string, 0, len(tips))
+	for tip := range tips {
+		ordered = append(ordered, tip)
 	}
-	sort.Strings(hashes)
+	sort.Strings(ordered)
 
-	commits := make([]gitexec.Commit, 0, len(hashes))
-	for _, hash := range hashes {
-		commit, err := git.CommitMeta(ctx, hash)
+	seen := make(map[string]struct{}, len(tips))
+	var candidates []string
+	for _, tip := range ordered {
+		chain, err := git.Unreachable(ctx, tip)
 		if err != nil {
 			return nil, err
 		}
-		commits = append(commits, commit)
+		for _, hash := range chain {
+			if _, duplicate := seen[hash]; duplicate {
+				continue
+			}
+			seen[hash] = struct{}{}
+			candidates = append(candidates, hash)
+		}
+	}
+	return candidates, nil
+}
+
+func describeOrphans(ctx context.Context, git *gitexec.Runner, candidates []string, limit int) ([]gitexec.Commit, error) {
+	// Bound the metadata reads before making them: each one is a git subprocess, and a long
+	// lost chain would otherwise cost hundreds of them only to be truncated afterwards.
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+
+	commits, err := git.CommitMetas(ctx, candidates)
+	if err != nil {
+		return nil, err
 	}
 
 	sort.SliceStable(commits, func(i, j int) bool {
@@ -111,10 +139,6 @@ func describeOrphans(ctx context.Context, git *gitexec.Runner, orphans map[strin
 		}
 		return commits[i].When.After(commits[j].When)
 	})
-
-	if len(commits) > limit {
-		commits = commits[:limit]
-	}
 	return commits, nil
 }
 

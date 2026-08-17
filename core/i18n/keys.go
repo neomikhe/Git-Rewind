@@ -32,6 +32,7 @@ const (
 	LastDryRun
 	LastAbortedDirty
 	LastDone
+	LastFailedWithBackup
 
 	FindNoOrphans
 	FindNoMatch
@@ -117,6 +118,7 @@ const (
 	TuiWorking
 	TuiError
 	TuiErrDirtyTree
+	TuiErrApplyFailed
 	TuiHelpTitle
 	TuiHelpSafety
 	TuiHelpFooter

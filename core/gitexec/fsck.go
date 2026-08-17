@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"fmt"
 	"strings"
 )
 
@@ -16,6 +17,28 @@ func (r *Runner) Orphans(ctx context.Context) (map[string]struct{}, error) {
 		return nil, err
 	}
 	return parseDanglingCommits(out), nil
+}
+
+// Unreachable returns tip and every commit below it that no branch or tag reaches, newest
+// first. A dangling tip is only the head of a lost chain; the commits under it are just as
+// recoverable and just as worth searching.
+func (r *Runner) Unreachable(ctx context.Context, tip string) ([]string, error) {
+	out, err := r.run(ctx, "rev-list", tip, "--not", "--all")
+	if err != nil {
+		return nil, err
+	}
+
+	var hashes []string
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	for scanner.Scan() {
+		if hash := strings.TrimSpace(scanner.Text()); hash != "" {
+			hashes = append(hashes, hash)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("reading rev-list output: %w", err)
+	}
+	return hashes, nil
 }
 
 func parseDanglingCommits(out []byte) map[string]struct{} {

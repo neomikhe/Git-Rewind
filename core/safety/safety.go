@@ -63,6 +63,22 @@ type Result struct {
 	Commands     []string
 }
 
+// ApplyError reports a plan that failed partway through. It names the backup branch that
+// already holds the previous state, so the caller can always tell the user where their work
+// is even when the rescue itself went wrong.
+type ApplyError struct {
+	Command      string
+	BackupBranch string
+	Err          error
+}
+
+func (e *ApplyError) Error() string {
+	return fmt.Sprintf("running %q: %v (your previous state is saved on branch %s)",
+		e.Command, e.Err, e.BackupBranch)
+}
+
+func (e *ApplyError) Unwrap() error { return e.Err }
+
 // Apply previews a plan, or executes it after creating a backup branch that is never skipped.
 func Apply(ctx context.Context, git *gitexec.Runner, plan Plan, opts Options) (Result, error) {
 	preview := plan.Preview()
@@ -77,7 +93,11 @@ func Apply(ctx context.Context, git *gitexec.Runner, plan Plan, opts Options) (R
 
 	for i, c := range plan.Commands {
 		if _, err := git.Run(ctx, c.Args...); err != nil {
-			return Result{BackupBranch: backup}, fmt.Errorf("running %q: %w", preview[i], err)
+			return Result{BackupBranch: backup}, &ApplyError{
+				Command:      preview[i],
+				BackupBranch: backup,
+				Err:          err,
+			}
 		}
 	}
 	return Result{BackupBranch: backup, Commands: preview}, nil

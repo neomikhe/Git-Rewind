@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/neomikhe/git-rewind/core/gitexec"
 	"github.com/neomikhe/git-rewind/core/i18n"
@@ -117,11 +118,13 @@ func matchHeading(m search.Match) string {
 		m.Commit.Subject)
 }
 
+// clip shortens a matched line by runes, not bytes: a matched file can contain any UTF-8,
+// and slicing it by byte would cut a character in half and emit invalid output.
 func clip(s string) string {
-	if len(s) <= maxMatchLineLen {
+	if utf8.RuneCountInString(s) <= maxMatchLineLen {
 		return s
 	}
-	return s[:maxMatchLineLen] + "..."
+	return string([]rune(s)[:maxMatchLineLen]) + "..."
 }
 
 func shortHash(hash string) string {

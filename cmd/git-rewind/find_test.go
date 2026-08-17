@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestFindReportsTheLostCommitAndHowToKeepIt(t *testing.T) {
@@ -85,10 +86,28 @@ func TestFindOnARepoWithNothingLost(t *testing.T) {
 func TestClipKeepsOutputReadable(t *testing.T) {
 	long := strings.Repeat("x", maxMatchLineLen+50)
 	got := clip(long)
-	if len(got) != maxMatchLineLen+3 || !strings.HasSuffix(got, "...") {
-		t.Errorf("clip returned %d chars, want %d plus an ellipsis", len(got), maxMatchLineLen)
+	if utf8.RuneCountInString(got) != maxMatchLineLen+3 || !strings.HasSuffix(got, "...") {
+		t.Errorf("clip returned %d runes, want %d plus an ellipsis", utf8.RuneCountInString(got), maxMatchLineLen)
 	}
 	if short := clip("short"); short != "short" {
 		t.Errorf("clip shortened a line that fits: %q", short)
+	}
+}
+
+// TestClipNeverSplitsARune guards against slicing a matched line by byte. find greps whatever
+// is in the user's files, so a line of CJK, accented or emoji text would otherwise be cut
+// mid-character and printed as invalid UTF-8.
+func TestClipNeverSplitsARune(t *testing.T) {
+	for _, char := range []string{"á", "€", "漢", "🙂", "x"} {
+		line := strings.Repeat(char, maxMatchLineLen+40)
+		got := clip(line)
+
+		if !utf8.ValidString(got) {
+			t.Errorf("clip(%q repeated) produced invalid UTF-8", char)
+		}
+		if want := maxMatchLineLen + 3; utf8.RuneCountInString(got) != want {
+			t.Errorf("clip(%q repeated) kept %d runes, want %d — the limit counts characters, not bytes",
+				char, utf8.RuneCountInString(got), want)
+		}
 	}
 }

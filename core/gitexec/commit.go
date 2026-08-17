@@ -13,9 +13,14 @@ import (
 )
 
 const (
-	commitFormat = "%H" + unitSep + "%P" + unitSep + "%an" + unitSep + "%at" + unitSep + "%s" + unitSep + "%b"
+	// recordSep starts each record so multiple commits can be read from one invocation:
+	// %b contains newlines, so newline cannot separate records.
+	recordSep    = "\x1e"
+	commitFormat = "%x1e%H" + unitSep + "%P" + unitSep + "%an" + unitSep + "%at" + unitSep + "%s" + unitSep + "%b"
 	commitFields = 6
 	grepFields   = 3
+	// batchSize keeps a batched invocation's command line far below the Windows limit.
+	batchSize = 100
 )
 
 // Commit is a commit's identifying metadata, whether or not any ref reaches it.
@@ -37,11 +42,51 @@ type GrepMatch struct {
 
 // CommitMeta reads a single commit's metadata, including unreachable commits.
 func (r *Runner) CommitMeta(ctx context.Context, hash string) (Commit, error) {
-	out, err := r.run(ctx, "show", "-s", "--format="+commitFormat, hash)
+	commits, err := r.CommitMetas(ctx, []string{hash})
 	if err != nil {
 		return Commit{}, err
 	}
-	return parseCommit(string(out))
+	if len(commits) == 0 {
+		return Commit{}, fmt.Errorf("commit %s: no metadata returned", hash)
+	}
+	return commits[0], nil
+}
+
+// CommitMetas reads many commits' metadata in as few git invocations as possible, preserving
+// the order of hashes. Reading them one at a time costs a subprocess each, which dominates
+// the cost of searching a long chain of lost commits.
+func (r *Runner) CommitMetas(ctx context.Context, hashes []string) ([]Commit, error) {
+	commits := make([]Commit, 0, len(hashes))
+	for start := 0; start < len(hashes); start += batchSize {
+		end := min(start+batchSize, len(hashes))
+
+		args := append([]string{"log", "--no-walk", "--format=" + commitFormat}, hashes[start:end]...)
+		out, err := r.run(ctx, args...)
+		if err != nil {
+			return nil, err
+		}
+		batch, err := parseCommits(string(out))
+		if err != nil {
+			return nil, err
+		}
+		commits = append(commits, batch...)
+	}
+	return commits, nil
+}
+
+func parseCommits(out string) ([]Commit, error) {
+	var commits []Commit
+	for _, record := range strings.Split(out, recordSep) {
+		if strings.TrimSpace(record) == "" {
+			continue
+		}
+		commit, err := parseCommit(record)
+		if err != nil {
+			return nil, err
+		}
+		commits = append(commits, commit)
+	}
+	return commits, nil
 }
 
 // GrepCommit returns the lines of a commit's tree containing query, matched literally and

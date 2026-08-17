@@ -336,5 +336,9 @@ func (m model) errorText() string {
 	if errors.Is(m.err, errDirtyTree) {
 		return m.say(i18n.TuiErrDirtyTree)
 	}
+	var applyErr *safety.ApplyError
+	if errors.As(m.err, &applyErr) {
+		return m.say(i18n.TuiErrApplyFailed, applyErr.Command, applyErr.Err, applyErr.BackupBranch)
+	}
 	return m.err.Error()
 }
