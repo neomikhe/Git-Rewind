@@ -37,14 +37,15 @@ func run(args []string, dir string, stdout io.Writer) error {
 		}
 	}
 
-	entries, err := gitexec.New(dir).Reflog(context.Background())
+	git := gitexec.New(dir)
+	events, err := timeline.Load(context.Background(), git)
 	if err != nil {
 		return err
 	}
-	if len(entries) == 0 {
+	if len(events) == 0 {
 		return flush(stdout, "git-rewind: no repository history to show yet.\n")
 	}
-	return tui.Run(entries)
+	return tui.Run(tui.Session{Git: git, Events: events})
 }
 
 func runLast(args []string, dir string, stdout io.Writer) error {

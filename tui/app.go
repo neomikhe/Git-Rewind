@@ -1,0 +1,272 @@
+package tui
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/neomikhe/git-rewind/core/gitexec"
+	"github.com/neomikhe/git-rewind/core/recipes"
+	"github.com/neomikhe/git-rewind/core/safety"
+	"github.com/neomikhe/git-rewind/core/timeline"
+)
+
+var (
+	titleStyle    = lipgloss.NewStyle().Bold(true)
+	selectedStyle = lipgloss.NewStyle().Bold(true).Reverse(true)
+	helpStyle     = lipgloss.NewStyle().Faint(true)
+	labelStyle    = lipgloss.NewStyle().Faint(true)
+)
+
+var errDirtyTree = errors.New("uncommitted changes would be discarded; press f to apply anyway, or quit and commit or stash them first")
+
+// Session is the repository state the TUI works on.
+type Session struct {
+	Git    *gitexec.Runner
+	Events []timeline.Event
+}
+
+// Run launches the timeline TUI and blocks until the user quits.
+func Run(s Session) error {
+	_, err := tea.NewProgram(newModel(s), tea.WithAltScreen()).Run()
+	return err
+}
+
+type screen int
+
+const (
+	screenTimeline screen = iota
+	screenDetail
+	screenRescues
+	screenConfirm
+	screenResult
+)
+
+type rescue struct {
+	recipe recipes.Recipe
+	plan   *safety.Plan
+}
+
+type rescuesMsg struct {
+	rescues []rescue
+	dirty   bool
+	err     error
+}
+
+type appliedMsg struct {
+	result safety.Result
+	err    error
+}
+
+type model struct {
+	session Session
+	screen  screen
+	cursor  int
+	choice  int
+	height  int
+	now     time.Time
+	rescues []rescue
+	dirty   bool
+	loading bool
+	applied *safety.Result
+	err     error
+}
+
+func newModel(s Session) model {
+	return model{session: s, now: time.Now()}
+}
+
+func (m model) Init() tea.Cmd { return nil }
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.height = msg.Height
+	case rescuesMsg:
+		m.loading = false
+		m.err = msg.err
+		if msg.err == nil {
+			m.rescues, m.dirty, m.choice = msg.rescues, msg.dirty, 0
+			m.screen = screenRescues
+		}
+	case appliedMsg:
+		m.loading = false
+		m.err = msg.err
+		if msg.err == nil {
+			m.applied = &msg.result
+			m.screen = screenResult
+		}
+	case tea.KeyMsg:
+		return m.onKey(msg)
+	}
+	return m, nil
+}
+
+func (m model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if key := msg.String(); key == "q" || key == "ctrl+c" {
+		return m, tea.Quit
+	}
+	if m.loading {
+		return m, nil
+	}
+
+	switch m.screen {
+	case screenTimeline:
+		return m.onTimelineKey(msg)
+	case screenDetail:
+		return m.onDetailKey(msg)
+	case screenRescues:
+		return m.onRescuesKey(msg)
+	case screenConfirm:
+		return m.onConfirmKey(msg)
+	default:
+		return m, nil
+	}
+}
+
+func (m model) onTimelineKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		return m, tea.Quit
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	case "down", "j":
+		if m.cursor < len(m.session.Events)-1 {
+			m.cursor++
+		}
+	case "enter", "right", "l":
+		if len(m.session.Events) > 0 {
+			m.err = nil
+			m.screen = screenDetail
+		}
+	}
+	return m, nil
+}
+
+func (m model) onDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "left", "h", "backspace":
+		m.screen = screenTimeline
+	case "enter", "right", "l", "r":
+		m.err = nil
+		m.loading = true
+		return m, detectCmd(m.session)
+	}
+	return m, nil
+}
+
+func (m model) onRescuesKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "left", "h", "backspace":
+		m.screen = screenDetail
+	case "up", "k":
+		if m.choice > 0 {
+			m.choice--
+		}
+	case "down", "j":
+		if m.choice < len(m.rescues)-1 {
+			m.choice++
+		}
+	case "enter", "right", "l":
+		if len(m.rescues) > 0 {
+			m.err = nil
+			m.screen = screenConfirm
+		}
+	}
+	return m, nil
+}
+
+func (m model) onConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if len(m.rescues) == 0 {
+		m.screen = screenRescues
+		return m, nil
+	}
+	selected := m.rescues[m.choice]
+	discardsUncommitted := selected.plan.DiscardsChanges && m.dirty
+
+	switch msg.String() {
+	case "esc", "n", "left", "h", "backspace":
+		m.err = nil
+		m.screen = screenRescues
+	case "y":
+		if discardsUncommitted {
+			m.err = errDirtyTree
+			return m, nil
+		}
+		m.loading = true
+		return m, applyCmd(m.session, *selected.plan)
+	case "f":
+		if !discardsUncommitted {
+			return m, nil
+		}
+		m.err = nil
+		m.loading = true
+		return m, applyCmd(m.session, *selected.plan)
+	}
+	return m, nil
+}
+
+func detectCmd(s Session) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		repo := &recipes.Repo{Git: s.Git, Events: s.Events}
+
+		var found []rescue
+		for _, r := range recipes.All() {
+			plan, err := r.Detect(ctx, repo)
+			if err != nil {
+				return rescuesMsg{err: err}
+			}
+			if plan != nil {
+				found = append(found, rescue{recipe: r, plan: plan})
+			}
+		}
+
+		status, err := safety.WorkingTreeStatus(ctx, s.Git)
+		if err != nil {
+			return rescuesMsg{err: err}
+		}
+		return rescuesMsg{rescues: found, dirty: !status.Clean}
+	}
+}
+
+func applyCmd(s Session, plan safety.Plan) tea.Cmd {
+	return func() tea.Msg {
+		res, err := safety.Apply(context.Background(), s.Git, plan, safety.Options{Execute: true, Now: time.Now()})
+		return appliedMsg{result: res, err: err}
+	}
+}
+
+func (m model) View() string {
+	switch m.screen {
+	case screenDetail:
+		return m.detailView()
+	case screenRescues:
+		return m.rescuesView()
+	case screenConfirm:
+		return m.confirmView()
+	case screenResult:
+		return m.resultView()
+	default:
+		return m.timelineView()
+	}
+}
+
+func (m model) footer(help string) string {
+	var b strings.Builder
+	b.WriteString("\n")
+	if m.loading {
+		b.WriteString("Working...\n")
+	}
+	if m.err != nil {
+		b.WriteString("Error: " + m.err.Error() + "\n")
+	}
+	b.WriteString(helpStyle.Render(help))
+	return b.String()
+}

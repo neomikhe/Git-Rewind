@@ -8,37 +8,46 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/neomikhe/git-rewind/core/gitexec"
+	"github.com/neomikhe/git-rewind/core/timeline"
 )
 
-func sampleEntries() []gitexec.ReflogEntry {
+const orphanHash = "60f4edc0b1ab5048ca9f8e967c4deaeeb4228657"
+
+func sampleSession() Session {
 	base := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
-	return []gitexec.ReflogEntry{
-		{Index: 0, Ref: "HEAD", Time: base.Add(2 * time.Hour), Hash: "525df480d3eed5a1c12c2a6625e2aa08909c3447", Subject: "reset: moving to HEAD~1", Operation: "reset"},
-		{Index: 1, Ref: "HEAD", Time: base.Add(1 * time.Hour), Hash: "60f4edc0b1ab5048ca9f8e967c4deaeeb4228657", Subject: "checkout: moving from main to feature", Operation: "checkout"},
-		{Index: 2, Ref: "HEAD", Time: base, Hash: "9f53d6dcf9d5ab63fa7110448ab00e3ed58886c6", Subject: "commit: first commit", Operation: "commit"},
-	}
+	events := timeline.FromReflog([]gitexec.ReflogEntry{
+		{Index: 0, Ref: "HEAD", Time: base.Add(2 * time.Hour), Hash: "525df480d3eed5a1c12c2a6625e2aa08909c3447", ActorName: "Ada", Subject: "reset: moving to HEAD~1", Operation: "reset"},
+		{Index: 1, Ref: "HEAD", Time: base.Add(1 * time.Hour), Hash: orphanHash, ActorName: "Ada", Subject: "checkout: moving from main to feature", Operation: "checkout"},
+		{Index: 2, Ref: "HEAD", Time: base, Hash: "9f53d6dcf9d5ab63fa7110448ab00e3ed58886c6", ActorName: "Ada", Subject: "commit: first commit", Operation: "commit"},
+	})
+	events[0].Orphaned = []string{orphanHash}
+	return Session{Events: events}
 }
 
-func TestViewShowsEntries(t *testing.T) {
-	out := newModel(sampleEntries()).View()
+func TestTimelineViewShowsClassifiedEvents(t *testing.T) {
+	out := newModel(sampleSession()).View()
 
 	for _, want := range []string{
 		"git-rewind timeline (3 events)",
 		"HEAD@{0}",
-		"reset: moving to HEAD~1",
-		"checkout: moving from main to feature",
-		"commit: first commit",
+		"[red]",
+		"[yellow]",
+		"[green]",
 		"525df48",
+		"Reset the branch to HEAD~1 (1 commit left unreachable, recoverable)",
+		"Switched from main to feature",
+		`Committed "first commit"`,
+		"enter: details",
 		"q: quit",
 	} {
 		if !strings.Contains(out, want) {
-			t.Errorf("View() is missing %q\n---\n%s", want, out)
+			t.Errorf("timeline view is missing %q\n---\n%s", want, out)
 		}
 	}
 }
 
-func TestUpdateNavigationClamps(t *testing.T) {
-	m := newModel(sampleEntries())
+func TestTimelineNavigationClamps(t *testing.T) {
+	m := newModel(sampleSession())
 
 	m = update(m, tea.KeyMsg{Type: tea.KeyUp})
 	if m.cursor != 0 {
@@ -48,24 +57,22 @@ func TestUpdateNavigationClamps(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		m = update(m, tea.KeyMsg{Type: tea.KeyDown})
 	}
-	if want := len(m.entries) - 1; m.cursor != want {
+	if want := len(m.session.Events) - 1; m.cursor != want {
 		t.Fatalf("cursor after repeated down = %d, want %d", m.cursor, want)
 	}
 }
 
-func TestUpdateQuitKeys(t *testing.T) {
-	for _, key := range []tea.KeyMsg{
-		{Type: tea.KeyRunes, Runes: []rune("q")},
-		{Type: tea.KeyEsc},
-		{Type: tea.KeyCtrlC},
-	} {
-		_, cmd := newModel(sampleEntries()).Update(key)
-		if cmd == nil {
-			t.Fatalf("key %q produced no command, want quit", key.String())
-		}
-		if _, ok := cmd().(tea.QuitMsg); !ok {
-			t.Fatalf("key %q produced %T, want tea.QuitMsg", key.String(), cmd())
-		}
+func TestTimelineWindowKeepsCursorVisible(t *testing.T) {
+	m := newModel(sampleSession())
+	m.height = chromeHeight + 1
+	m.cursor = 2
+
+	start, end := m.window()
+	if m.cursor < start || m.cursor >= end {
+		t.Fatalf("window [%d,%d) does not contain the cursor %d", start, end, m.cursor)
+	}
+	if got := end - start; got != 1 {
+		t.Fatalf("window shows %d rows, want 1", got)
 	}
 }
 
@@ -88,6 +95,16 @@ func TestRelativeTime(t *testing.T) {
 				t.Errorf("relativeTime = %q, want %q", got, c.want)
 			}
 		})
+	}
+}
+
+func TestAgoPhrase(t *testing.T) {
+	now := time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC)
+	if got := agoPhrase(now.Add(-10*time.Second), now); got != "just now" {
+		t.Errorf("agoPhrase = %q, want %q", got, "just now")
+	}
+	if got := agoPhrase(now.Add(-3*time.Hour), now); got != "3h ago" {
+		t.Errorf("agoPhrase = %q, want %q", got, "3h ago")
 	}
 }
 

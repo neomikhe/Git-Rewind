@@ -5,10 +5,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-
 	"github.com/neomikhe/git-rewind/core/gitexec"
+	"github.com/neomikhe/git-rewind/core/timeline"
 )
 
 const (
@@ -18,56 +16,10 @@ const (
 	minVisibleRow = 1
 )
 
-var (
-	titleStyle    = lipgloss.NewStyle().Bold(true)
-	selectedStyle = lipgloss.NewStyle().Bold(true).Reverse(true)
-	helpStyle     = lipgloss.NewStyle().Faint(true)
-)
-
-// Run launches the timeline TUI and blocks until the user quits.
-func Run(entries []gitexec.ReflogEntry) error {
-	_, err := tea.NewProgram(newModel(entries), tea.WithAltScreen()).Run()
-	return err
-}
-
-type model struct {
-	entries []gitexec.ReflogEntry
-	cursor  int
-	height  int
-	now     time.Time
-}
-
-func newModel(entries []gitexec.ReflogEntry) model {
-	return model{entries: entries, now: time.Now()}
-}
-
-func (m model) Init() tea.Cmd { return nil }
-
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.height = msg.Height
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "esc", "ctrl+c":
-			return m, tea.Quit
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		case "down", "j":
-			if m.cursor < len(m.entries)-1 {
-				m.cursor++
-			}
-		}
-	}
-	return m, nil
-}
-
-func (m model) View() string {
+func (m model) timelineView() string {
 	var b strings.Builder
 
-	b.WriteString(titleStyle.Render(fmt.Sprintf("git-rewind timeline (%d events)", len(m.entries))))
+	b.WriteString(titleStyle.Render(fmt.Sprintf("git-rewind timeline (%d events)", len(m.session.Events))))
 	b.WriteString("\n\n")
 
 	start, end := m.window()
@@ -76,24 +28,19 @@ func (m model) View() string {
 		b.WriteByte('\n')
 	}
 
-	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("up/down or j/k: move  |  q: quit"))
+	b.WriteString(m.footer("up/down or j/k: move  |  enter: details  |  q: quit"))
 	return b.String()
 }
 
 func (m model) renderRow(i int) string {
-	e := m.entries[i]
+	e := m.session.Events[i]
 
-	short := e.Hash
-	if len(short) > shortHashLen {
-		short = short[:shortHashLen]
-	}
-
-	line := fmt.Sprintf("%-10s %5s  %s  %s",
-		fmt.Sprintf("%s@{%d}", e.Ref, e.Index),
-		relativeTime(e.Time, m.now),
-		short,
-		e.Subject,
+	line := fmt.Sprintf("%-10s %5s  %-8s %s  %s",
+		selectorOf(e.Entry),
+		relativeTime(e.Entry.Time, m.now),
+		riskLabel(e.Risk),
+		shortHash(e.Entry.Hash),
+		e.Describe(),
 	)
 
 	if i == m.cursor {
@@ -103,15 +50,15 @@ func (m model) renderRow(i int) string {
 }
 
 func (m model) window() (start, end int) {
-	visible := len(m.entries)
+	visible := len(m.session.Events)
 	if m.height > 0 {
 		visible = m.height - chromeHeight
 		if visible < minVisibleRow {
 			visible = minVisibleRow
 		}
 	}
-	if visible >= len(m.entries) {
-		return 0, len(m.entries)
+	if visible >= len(m.session.Events) {
+		return 0, len(m.session.Events)
 	}
 
 	start = m.cursor - visible/2
@@ -119,11 +66,26 @@ func (m model) window() (start, end int) {
 		start = 0
 	}
 	end = start + visible
-	if end > len(m.entries) {
-		end = len(m.entries)
+	if end > len(m.session.Events) {
+		end = len(m.session.Events)
 		start = end - visible
 	}
 	return start, end
+}
+
+func selectorOf(e gitexec.ReflogEntry) string {
+	return fmt.Sprintf("%s@{%d}", e.Ref, e.Index)
+}
+
+func riskLabel(r timeline.Risk) string {
+	return "[" + r.String() + "]"
+}
+
+func shortHash(hash string) string {
+	if len(hash) > shortHashLen {
+		return hash[:shortHashLen]
+	}
+	return hash
 }
 
 func relativeTime(t, now time.Time) string {
@@ -138,4 +100,12 @@ func relativeTime(t, now time.Time) string {
 	default:
 		return fmt.Sprintf("%dd", int(d.Hours()/hoursPerDay))
 	}
+}
+
+func agoPhrase(t, now time.Time) string {
+	rel := relativeTime(t, now)
+	if rel == "now" {
+		return "just now"
+	}
+	return rel + " ago"
 }
