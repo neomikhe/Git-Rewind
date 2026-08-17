@@ -71,6 +71,7 @@ func runLast(args []string, dir string, stdout io.Writer) error {
 	fs.SetOutput(stdout)
 	apply := fs.Bool("yes", false, "apply the rescue; without this it is a dry run that only prints the commands")
 	force := fs.Bool("force", false, "apply even when a reset would discard uncommitted changes")
+	asJSON := fs.Bool("json", false, "print the result as JSON instead of text")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -88,6 +89,9 @@ func runLast(args []string, dir string, stdout io.Writer) error {
 		return err
 	}
 	if plan == nil {
+		if *asJSON {
+			return writeJSON(stdout, jsonLast{Schema: jsonSchema, Command: "last", DryRun: !*apply})
+		}
 		return flush(stdout, "git-rewind: nothing to undo — no rescue applies to the recent history.\n")
 	}
 
@@ -97,11 +101,16 @@ func runLast(args []string, dir string, stdout io.Writer) error {
 	}
 	dirtyRisk := plan.DiscardsChanges && !status.Clean
 
-	if err := flush(stdout, describePlan(recipe, plan, dirtyRisk)); err != nil {
-		return err
+	if !*asJSON {
+		if err := flush(stdout, describePlan(recipe, plan, dirtyRisk)); err != nil {
+			return err
+		}
 	}
 
 	if !*apply {
+		if *asJSON {
+			return writeJSON(stdout, lastResult(recipe, plan, status, true, ""))
+		}
 		return flush(stdout, "\nDry run. Re-run with --yes to apply it; a backup branch is always created first.\n")
 	}
 	if dirtyRisk && !*force {
@@ -111,6 +120,9 @@ func runLast(args []string, dir string, stdout io.Writer) error {
 	res, err := safety.Apply(ctx, git, *plan, safety.Options{Execute: true, Now: time.Now()})
 	if err != nil {
 		return err
+	}
+	if *asJSON {
+		return writeJSON(stdout, lastResult(recipe, plan, status, false, res.BackupBranch))
 	}
 	return flush(stdout, fmt.Sprintf("\nDone. The previous state is saved on branch %s.\n", res.BackupBranch))
 }

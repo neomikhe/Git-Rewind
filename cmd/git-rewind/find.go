@@ -22,11 +22,14 @@ func runFind(args []string, dir string, stdout io.Writer) error {
 	fs.SetOutput(stdout)
 	messagesOnly := fs.Bool("messages", false, "search commit messages only, not file contents (faster on large repositories)")
 	limit := fs.Int("limit", search.DefaultMaxCommits, "how many unreachable commits to inspect")
-	if err := fs.Parse(args); err != nil {
+	asJSON := fs.Bool("json", false, "print the matches as JSON instead of text")
+
+	leading, rest := splitLeadingText(args)
+	if err := fs.Parse(rest); err != nil {
 		return err
 	}
 
-	query := strings.TrimSpace(strings.Join(fs.Args(), " "))
+	query := strings.TrimSpace(strings.Join(append(leading, fs.Args()...), " "))
 	if query == "" {
 		return errors.New("nothing to look for (try: git rewind find \"the text you lost\")")
 	}
@@ -38,7 +41,27 @@ func runFind(args []string, dir string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if *asJSON {
+		return writeJSON(stdout, jsonFind{
+			Schema:    jsonSchema,
+			Command:   "find",
+			Query:     result.Query,
+			Orphans:   result.Orphans,
+			Inspected: result.Inspected,
+			Truncated: result.Truncated(),
+			Matches:   toJSONMatches(result.Matches),
+		})
+	}
 	return flush(stdout, describeSearch(result))
+}
+
+func splitLeadingText(args []string) (text, rest []string) {
+	for i, a := range args {
+		if strings.HasPrefix(a, "-") {
+			return args[:i], args[i:]
+		}
+	}
+	return args, nil
 }
 
 func describeSearch(r search.Result) string {

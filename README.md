@@ -180,6 +180,17 @@ Linux, macOS and Windows are all supported and all tested in CI.
 | `git rewind last --yes --force` | Also allow it when the rescue would discard uncommitted changes. |
 | `git rewind find "<text>"` | Search unreachable commits by message and file contents. Read-only. |
 | `git rewind explain` | Diagnose the repository right now: HEAD, working tree, last event, what is recoverable. Read-only. |
+
+`last`, `find` and `explain` all accept `--json` for scripting. The document carries a
+`schema` field so a consumer can tell when the shape changes, errors still go to stderr with
+a non-zero exit, and `--json` never changes what a command *does* — a dry run stays a dry
+run. Flags may come before or after the search text.
+
+```console
+$ git rewind explain --json | jq '.rescue.name, .unreachableCommits'
+"recover-after-reset-hard"
+1
+```
 | `git rewind version` | Print the version, commit and platform — worth including in bug reports. |
 
 ## What it can rescue

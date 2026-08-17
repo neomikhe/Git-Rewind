@@ -29,6 +29,7 @@ type diagnosis struct {
 func runExplain(args []string, dir string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("explain", flag.ContinueOnError)
 	fs.SetOutput(stdout)
+	asJSON := fs.Bool("json", false, "print the diagnosis as JSON instead of text")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -41,6 +42,9 @@ func runExplain(args []string, dir string, stdout io.Writer) error {
 		return err
 	}
 	if len(events) == 0 {
+		if *asJSON {
+			return writeJSON(stdout, jsonExplain{Schema: jsonSchema, Command: "explain"})
+		}
 		return flush(stdout, "git-rewind: no repository history yet, so there is nothing to explain.\n")
 	}
 
@@ -66,6 +70,18 @@ func runExplain(args []string, dir string, stdout io.Writer) error {
 	}
 	d.unhealthy = d.orphans > 0 || d.head.Detached
 
+	if *asJSON {
+		last := toJSONEvent(d.events[0])
+		return writeJSON(stdout, jsonExplain{
+			Schema:      jsonSchema,
+			Command:     "explain",
+			Head:        toJSONHead(d.head),
+			WorkingTree: toJSONWorkingTree(d.status),
+			LastEvent:   &last,
+			Unreachable: d.orphans,
+			Rescue:      toJSONRescue(d.rescue),
+		})
+	}
 	return flush(stdout, describeState(d))
 }
 
