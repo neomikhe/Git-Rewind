@@ -75,7 +75,7 @@ func TestApplyDryRunChangesNothing(t *testing.T) {
 
 	plan := Plan{Commands: []Command{{Args: []string{"reset", "--hard", "HEAD~1"}, Explain: "discard the last commit"}}}
 
-	res, err := Apply(ctx, git, plan, Options{}) // Execute defaults to false
+	res, err := Apply(ctx, git, plan, Options{})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -115,17 +115,13 @@ func TestApplyExecutesAfterBackup(t *testing.T) {
 	if want := "backup/rewind-20260707-093000"; res.BackupBranch != want {
 		t.Fatalf("BackupBranch = %q, want %q", res.BackupBranch, want)
 	}
-	// The backup must capture the pre-reset state...
 	if tip := revParse(t, git, res.BackupBranch); tip != second {
 		t.Errorf("backup points at %s, want pre-reset HEAD %s", tip, second)
 	}
-	// ...and HEAD must have moved back.
 	if head := revParse(t, git, "HEAD"); head != first {
 		t.Errorf("HEAD is %s after reset, want %s", head, first)
 	}
 }
-
-// --- test helpers ---
 
 func twoCommitRepo(t *testing.T) (dir, first, second string) {
 	t.Helper()

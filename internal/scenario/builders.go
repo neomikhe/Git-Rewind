@@ -53,7 +53,6 @@ func All() []Scenario {
 	}
 }
 
-// buildResetHard sets "lost" to the commit discarded by reset --hard.
 func buildResetHard(dir string) (Built, error) {
 	r := newRepo(dir)
 	r.commit("file.txt", "one\n", "first commit")
@@ -73,7 +72,6 @@ func verifyResetHard(b Built) error {
 	return nil
 }
 
-// buildAmend sets "original" (pre-amend commit) and "amended" (new HEAD).
 func buildAmend(dir string) (Built, error) {
 	r := newRepo(dir)
 	r.commit("file.txt", "one\n", "first commit")
@@ -102,7 +100,6 @@ func verifyAmend(b Built) error {
 	return nil
 }
 
-// buildDeletedBranch sets "branch" (name) and "tip" (its last commit).
 func buildDeletedBranch(dir string) (Built, error) {
 	r := newRepo(dir)
 	r.commit("base.txt", "base\n", "base commit")
@@ -120,7 +117,6 @@ func verifyDeletedBranch(b Built) error {
 	return requireCommit(b.Dir, b.Anchors["tip"])
 }
 
-// buildRebaseRewrite sets "preRebase" (original tip) and "newTip" (post-rebase).
 func buildRebaseRewrite(dir string) (Built, error) {
 	r := newRepo(dir)
 	r.commit("base.txt", "base\n", "base commit")
@@ -151,7 +147,6 @@ func verifyRebaseRewrite(b Built) error {
 	return nil
 }
 
-// buildPreMerge sets "preMerge" (first parent) and "merge" (the merge commit).
 func buildPreMerge(dir string) (Built, error) {
 	r := newRepo(dir)
 	r.commit("base.txt", "base\n", "base commit")
@@ -178,7 +173,6 @@ func verifyPreMerge(b Built) error {
 	return nil
 }
 
-// buildDetachedHead sets "commit" to the detached commit HEAD points at.
 func buildDetachedHead(dir string) (Built, error) {
 	r := newRepo(dir)
 	first := r.commit("file.txt", "one\n", "first commit")
@@ -194,7 +188,6 @@ func verifyDetachedHead(b Built) error {
 	return requireHead(b.Dir, b.Anchors["commit"])
 }
 
-// buildDroppedStash sets "stash" to the dropped stash commit.
 func buildDroppedStash(dir string) (Built, error) {
 	r := newRepo(dir)
 	r.commit("file.txt", "base\n", "base commit")
@@ -216,7 +209,6 @@ func verifyDroppedStash(b Built) error {
 	return requireCommit(b.Dir, b.Anchors["stash"])
 }
 
-// requireHead returns an error unless HEAD resolves to want.
 func requireHead(dir, want string) error {
 	head, err := gitOut(dir, "rev-parse", "HEAD")
 	if err != nil {

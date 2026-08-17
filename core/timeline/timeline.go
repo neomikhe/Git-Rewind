@@ -6,19 +6,13 @@ import (
 	"github.com/neomikhe/git-rewind/core/gitexec"
 )
 
-// Risk is how dangerous an event is to the user's committed work. It is the
-// green/yellow/red signal the timeline highlights so a user can find the moment
-// something went wrong.
+// Risk is how dangerous an event is to the user's committed work.
 type Risk int
 
+// Risk levels, from safe forward progress to operations that can discard committed work.
 const (
-	// RiskGreen is normal, safe forward progress (a plain commit, a new branch).
 	RiskGreen Risk = iota
-	// RiskYellow changes what HEAD or a branch points at, or pulls in outside
-	// changes; recoverable and usually intentional, but worth noticing.
 	RiskYellow
-	// RiskRed can discard or rewrite committed history, so work may have become
-	// unreachable from its branch.
 	RiskRed
 )
 
@@ -38,8 +32,7 @@ func (r Risk) String() string {
 // Kind is the classified operation behind a reflog entry.
 type Kind int
 
-// Kind values name the operation behind a reflog entry; KindOther covers
-// anything the timeline does not specifically recognize.
+// Kind values name the operation behind a reflog entry; KindOther covers the unrecognized.
 const (
 	KindOther Kind = iota
 	KindCommit
@@ -87,22 +80,15 @@ func (k Kind) String() string {
 	}
 }
 
-// Event is a single reflog entry classified by kind and risk.
+// Event is a single reflog entry classified by kind and risk, with any commits it stranded.
 type Event struct {
-	// Entry is the underlying reflog entry the event was derived from.
-	Entry gitexec.ReflogEntry
-	// Kind is the operation the entry represents.
-	Kind Kind
-	// Risk is how dangerous that operation is to committed work.
-	Risk Risk
-	// Orphaned holds commit hashes this event made unreachable from any branch
-	// or tag but that still exist and can be recovered. It is populated by
-	// AttachOrphans; nil until then.
+	Entry    gitexec.ReflogEntry
+	Kind     Kind
+	Risk     Risk
 	Orphaned []string
 }
 
-// FromReflog classifies reflog entries into timeline events, preserving the
-// reflog's most-recent-first order.
+// FromReflog classifies reflog entries into events, preserving their most-recent-first order.
 func FromReflog(entries []gitexec.ReflogEntry) []Event {
 	events := make([]Event, len(entries))
 	for i, entry := range entries {
@@ -112,12 +98,7 @@ func FromReflog(entries []gitexec.ReflogEntry) []Event {
 	return events
 }
 
-// AttachOrphans links each history-rewriting event to the commit tip it made
-// unreachable, when that tip appears in the orphan set (as returned by
-// gitexec.Orphans). The orphaned tip is the ref's previous value — the hash
-// recorded by the next-older reflog entry — because consecutive HEAD reflog
-// entries chain. Events keep their reflog order; the input slice is modified in
-// place.
+// AttachOrphans records, on each history-rewriting event, the recoverable tip it made unreachable.
 func AttachOrphans(events []Event, orphans map[string]struct{}) {
 	for i := range events {
 		if !canOrphan(events[i].Kind) {
@@ -133,8 +114,6 @@ func AttachOrphans(events []Event, orphans map[string]struct{}) {
 	}
 }
 
-// canOrphan reports whether a kind can leave a previously referenced commit
-// unreachable.
 func canOrphan(kind Kind) bool {
 	switch kind {
 	case KindReset, KindAmend, KindRebase:
@@ -144,8 +123,6 @@ func canOrphan(kind Kind) bool {
 	}
 }
 
-// previousValue returns the ref value in effect before event i — the hash of the
-// next-older reflog entry — or false when i is the oldest entry.
 func previousValue(events []Event, i int) (string, bool) {
 	if i+1 >= len(events) {
 		return "", false
@@ -153,9 +130,6 @@ func previousValue(events []Event, i int) (string, bool) {
 	return events[i+1].Entry.Hash, true
 }
 
-// classify maps a reflog operation label (the text before the first colon, such
-// as "commit (amend)" or "merge feature") to a Kind. Order matters: the more
-// specific commit variants are checked before the plain "commit" prefix.
 func classify(operation string) Kind {
 	op := strings.TrimSpace(operation)
 	switch {
@@ -188,9 +162,6 @@ func classify(operation string) Kind {
 	}
 }
 
-// riskOf assigns a risk level to a kind. Operations that can rewrite or discard
-// committed history are red; operations that only move refs or pull in outside
-// changes are yellow; additive, forward progress is green.
 func riskOf(kind Kind) Risk {
 	switch kind {
 	case KindReset, KindRebase, KindAmend:

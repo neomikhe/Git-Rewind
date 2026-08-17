@@ -1,9 +1,6 @@
-// Command git-rewind reads a Git repository's reflog, fsck, and working-tree
-// state, translates it into a human-readable timeline of recent events, and
-// offers safe, reversible "rescue" actions to undo Git mistakes.
-//
-// When installed on PATH as "git-rewind", Git invokes it as the native
-// subcommand "git rewind".
+// Command git-rewind turns a Git repository's reflog into a readable timeline of recent
+// events and offers safe, backed-up rescue actions to undo Git mistakes. Installed on
+// PATH as "git-rewind", it is invoked natively as "git rewind".
 package main
 
 import (
@@ -30,8 +27,6 @@ func main() {
 	}
 }
 
-// run dispatches subcommands. With no arguments it launches the interactive
-// timeline; "last" runs the non-interactive rescue for the most recent mistake.
 func run(args []string, dir string, stdout io.Writer) error {
 	if len(args) > 0 {
 		switch args[0] {
@@ -52,10 +47,6 @@ func run(args []string, dir string, stdout io.Writer) error {
 	return tui.Run(entries)
 }
 
-// runLast finds the rescue for the most recent mistake, prints exactly what it
-// would run, and applies it only with --yes. A backup branch is always created
-// before anything runs, and a reset that would discard uncommitted changes is
-// refused on a dirty working tree unless --force is given.
 func runLast(args []string, dir string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("last", flag.ContinueOnError)
 	fs.SetOutput(stdout)
@@ -105,8 +96,6 @@ func runLast(args []string, dir string, stdout io.Writer) error {
 	return flush(stdout, fmt.Sprintf("\nDone. The previous state is saved on branch %s.\n", res.BackupBranch))
 }
 
-// chooseRescue returns the first applicable recipe and its plan, or a nil plan
-// when nothing applies.
 func chooseRescue(ctx context.Context, repo *recipes.Repo) (recipes.Recipe, *safety.Plan, error) {
 	for _, r := range recipes.All() {
 		plan, err := r.Detect(ctx, repo)
@@ -120,8 +109,6 @@ func chooseRescue(ctx context.Context, repo *recipes.Repo) (recipes.Recipe, *saf
 	return nil, nil, nil
 }
 
-// describePlan renders the rescue, its exact commands, warnings, and the
-// dirty-tree caution the user should read before applying.
 func describePlan(recipe recipes.Recipe, plan *safety.Plan, dirtyRisk bool) string {
 	var b strings.Builder
 	b.WriteString("Rescue: " + recipe.Title() + "\n\nWill run:\n")
@@ -137,7 +124,6 @@ func describePlan(recipe recipes.Recipe, plan *safety.Plan, dirtyRisk bool) stri
 	return b.String()
 }
 
-// flush writes s to w and returns any write error.
 func flush(w io.Writer, s string) error {
 	_, err := io.WriteString(w, s)
 	return err

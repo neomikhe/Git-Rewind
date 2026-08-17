@@ -9,9 +9,6 @@ import (
 	"time"
 )
 
-// TestReflogParsesRealRepo builds a real repository with a known sequence of
-// operations (commit, amend, checkout, reset --hard) at deterministic times and
-// verifies that Reflog parses every field of every entry correctly.
 func TestReflogParsesRealRepo(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH")
@@ -40,8 +37,6 @@ func TestReflogParsesRealRepo(t *testing.T) {
 		t.Fatalf("Reflog: %v", err)
 	}
 
-	// Reflog is newest first, so the reset is entry 0 and the initial commit
-	// is last.
 	want := []struct {
 		operation string
 		when      time.Time
@@ -80,8 +75,6 @@ func TestReflogParsesRealRepo(t *testing.T) {
 	}
 }
 
-// TestReflogEmptyRepo confirms that a repository with no reflog yields no
-// entries and no error.
 func TestReflogEmptyRepo(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH")
@@ -106,8 +99,6 @@ func initRepo(t *testing.T, dir string) {
 	runGitEnv(t, dir, nil, "config", "user.email", "test@example.com")
 }
 
-// runGit runs a git command whose author and committer dates (and therefore its
-// reflog timestamp) are pinned to when, so the reflog is reproducible.
 func runGit(t *testing.T, dir string, when time.Time, args ...string) {
 	t.Helper()
 	stamp := when.Format("2006-01-02T15:04:05 -0700")
@@ -127,7 +118,6 @@ func runGitEnv(t *testing.T, dir string, extraEnv []string, args ...string) {
 	}
 }
 
-// workFile is the single tracked file the gitexec tests create and mutate.
 const workFile = "f.txt"
 
 func writeFile(t *testing.T, dir, content string) {

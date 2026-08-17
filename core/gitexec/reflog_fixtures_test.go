@@ -6,19 +6,8 @@ import (
 	"time"
 )
 
-// The reflog parser reads a fixed --format string, so the *structure* of git's
-// output is stable across versions by design. What varies between git versions
-// is the reflog subject wording (merge strategy names, interactive-rebase
-// labels, the "initial" tag) and identity/selector edge cases. These fixtures
-// capture that variation as exact bytes (the 0x1F field separator included) so
-// the parser is proven against outputs from different git eras without needing
-// several git binaries installed.
-
-// unitSepFixture is the 0x1F field separator git emits between --format fields.
 const unitSepFixture = "\x1f"
 
-// entryLine assembles one raw reflog line exactly as git would print it under
-// our --format string.
 func entryLine(selector, hash, name, email, subject string) string {
 	return strings.Join([]string{selector, hash, name, email, subject}, unitSepFixture)
 }

@@ -13,9 +13,6 @@ import (
 	"github.com/neomikhe/git-rewind/internal/scenario"
 )
 
-// TestRunEmptyRepoPrintsNotice covers the non-interactive path of the default
-// command: a repository with no history prints a notice instead of launching
-// the TUI.
 func TestRunEmptyRepoPrintsNotice(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH")
@@ -107,9 +104,8 @@ func TestLastNothingToUndo(t *testing.T) {
 func TestLastAbortsOnDirtyTree(t *testing.T) {
 	dir, lost := resetHardRepo(t)
 	before := headHash(t, dir)
-	writeFile(t, dir, "file.txt", "one\ndirty\n") // modify the tracked file a reset --hard would discard
+	writeFile(t, dir, "file.txt", "one\ndirty\n")
 
-	// --yes without --force must refuse and change nothing.
 	var buf bytes.Buffer
 	if err := run([]string{"last", "--yes"}, dir, &buf); err == nil {
 		t.Fatal("expected an error for a dirty working tree")
@@ -118,7 +114,6 @@ func TestLastAbortsOnDirtyTree(t *testing.T) {
 		t.Errorf("aborted rescue still moved HEAD to %s, want %s", head, before)
 	}
 
-	// --force proceeds.
 	var buf2 bytes.Buffer
 	if err := run([]string{"last", "--yes", "--force"}, dir, &buf2); err != nil {
 		t.Fatalf("run last --yes --force: %v", err)
@@ -128,10 +123,6 @@ func TestLastAbortsOnDirtyTree(t *testing.T) {
 	}
 }
 
-// --- test helpers ---
-
-// resetHardRepo builds the reset-hard scenario and returns its path and the
-// hash of the commit the reset discarded.
 func resetHardRepo(t *testing.T) (dir, lost string) {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {

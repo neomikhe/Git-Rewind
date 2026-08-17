@@ -28,7 +28,7 @@ func TestViewShowsEntries(t *testing.T) {
 		"reset: moving to HEAD~1",
 		"checkout: moving from main to feature",
 		"commit: first commit",
-		"525df48", // short hash
+		"525df48",
 		"q: quit",
 	} {
 		if !strings.Contains(out, want) {
@@ -40,13 +40,11 @@ func TestViewShowsEntries(t *testing.T) {
 func TestUpdateNavigationClamps(t *testing.T) {
 	m := newModel(sampleEntries())
 
-	// Up at the top stays at 0.
 	m = update(m, tea.KeyMsg{Type: tea.KeyUp})
 	if m.cursor != 0 {
 		t.Fatalf("cursor after up at top = %d, want 0", m.cursor)
 	}
 
-	// Down moves through the list and clamps at the last entry.
 	for i := 0; i < 5; i++ {
 		m = update(m, tea.KeyMsg{Type: tea.KeyDown})
 	}
@@ -93,7 +91,6 @@ func TestRelativeTime(t *testing.T) {
 	}
 }
 
-// update applies a message and returns the concrete model type for assertions.
 func update(m model, msg tea.Msg) model {
 	next, _ := m.Update(msg)
 	return next.(model)

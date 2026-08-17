@@ -1,12 +1,5 @@
-// Package scenario builds reproducible "broken" Git repositories used by
-// git-rewind's integration tests. Each Scenario creates a specific wreckage
-// (reset --hard, deleted branch, amend, aborted rebase, ...) with deterministic
-// commits and timestamps, and can verify that the repository ended up in the
-// expected broken state.
-//
-// The builders shell out to the system git binary with a hermetic environment
-// (global and system config disabled, GC turned off, fixed identity and dates)
-// so results are identical across machines and platforms, including Windows.
+// Package scenario builds reproducible "broken" Git repositories for git-rewind's
+// integration tests, each with a hermetic environment and a deterministic clock.
 package scenario
 
 import (
@@ -19,41 +12,28 @@ import (
 	"time"
 )
 
-// Scenario describes one reproducible broken-repository fixture.
+const shortHashLen = 7
+
+// Scenario describes one reproducible broken-repository fixture and how to verify it.
 type Scenario struct {
-	// Name is a stable, kebab-case identifier, e.g. "reset-hard".
-	Name string
-	// Description is a one-line summary of what went wrong.
+	Name        string
 	Description string
-	// Build creates the scenario in dir (an existing, empty directory) and
-	// returns the anchors a rescue test needs.
-	Build func(dir string) (Built, error)
-	// Verify confirms the repository is in the expected broken state. It is the
-	// guard that keeps these fixtures trustworthy as the project evolves.
-	Verify func(b Built) error
+	Build       func(dir string) (Built, error)
+	Verify      func(b Built) error
 }
 
-// Built is the result of building a scenario.
+// Built is a built scenario: the repository path and its named hashes and refs.
 type Built struct {
-	// Dir is the repository path.
-	Dir string
-	// Anchors holds scenario-specific named hashes and refs (for example
-	// "lost" -> the hash of an orphaned commit). Each builder documents the
-	// keys it sets.
+	Dir     string
 	Anchors map[string]string
 }
 
-// repo is a small helper for building a scenario repository. It uses a sticky
-// error: once any git command fails, later calls are no-ops and the first error
-// is returned by done, keeping builder code free of repetitive error checks.
 type repo struct {
 	dir   string
 	clock time.Time
 	err   error
 }
 
-// newRepo initializes a fresh repository in dir with a deterministic clock and
-// hermetic settings.
 func newRepo(dir string) *repo {
 	r := &repo{dir: dir, clock: time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)}
 	r.git("init", "-q", "-b", "main")
@@ -63,8 +43,6 @@ func newRepo(dir string) *repo {
 	return r
 }
 
-// git runs a git command in the repository, advancing the clock by a minute so
-// each operation has a distinct, reproducible timestamp.
 func (r *repo) git(args ...string) string {
 	if r.err != nil {
 		return ""
@@ -86,7 +64,6 @@ func (r *repo) git(args ...string) string {
 	return out
 }
 
-// writeFile writes content to a file inside the repository.
 func (r *repo) writeFile(name, content string) {
 	if r.err != nil {
 		return
@@ -96,7 +73,6 @@ func (r *repo) writeFile(name, content string) {
 	}
 }
 
-// commit writes a file, stages it, commits it, and returns the new HEAD hash.
 func (r *repo) commit(name, content, message string) string {
 	r.writeFile(name, content)
 	r.git("add", name)
@@ -104,7 +80,6 @@ func (r *repo) commit(name, content, message string) string {
 	return r.git("rev-parse", "HEAD")
 }
 
-// done returns the built scenario, or the first git error that occurred.
 func (r *repo) done(anchors map[string]string) (Built, error) {
 	if r.err != nil {
 		return Built{}, r.err
@@ -112,8 +87,6 @@ func (r *repo) done(anchors map[string]string) (Built, error) {
 	return Built{Dir: r.dir, Anchors: anchors}, nil
 }
 
-// runGit executes a git command in dir with a hermetic environment and returns
-// its trimmed standard output.
 func runGit(dir string, extraEnv []string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...) //nolint:gosec // G204: fixed "git" command with package-controlled arguments.
 	cmd.Dir = dir
@@ -133,18 +106,15 @@ func runGit(dir string, extraEnv []string, args ...string) (string, error) {
 	return strings.TrimSpace(stdout.String()), nil
 }
 
-// gitOut runs a read-only git query in dir and returns its trimmed output.
 func gitOut(dir string, args ...string) (string, error) {
 	return runGit(dir, nil, args...)
 }
 
-// gitSucceeds reports whether a git command exits zero.
 func gitSucceeds(dir string, args ...string) bool {
 	_, err := runGit(dir, nil, args...)
 	return err == nil
 }
 
-// parents returns the parent hashes of a revision.
 func parents(dir, rev string) ([]string, error) {
 	out, err := gitOut(dir, "rev-list", "--parents", "-n", "1", rev)
 	if err != nil {
@@ -154,11 +124,9 @@ func parents(dir, rev string) ([]string, error) {
 	if len(fields) == 0 {
 		return nil, fmt.Errorf("no revision found for %q", rev)
 	}
-	return fields[1:], nil // the first field is the commit itself
+	return fields[1:], nil
 }
 
-// requireCommit returns an error unless hash names an existing commit object,
-// which is what makes a "lost" commit recoverable.
 func requireCommit(dir, hash string) error {
 	typ, err := gitOut(dir, "cat-file", "-t", hash)
 	if err != nil {
@@ -170,10 +138,9 @@ func requireCommit(dir, hash string) error {
 	return nil
 }
 
-// short abbreviates a hash for readable error messages.
 func short(hash string) string {
-	if len(hash) > 7 {
-		return hash[:7]
+	if len(hash) > shortHashLen {
+		return hash[:shortHashLen]
 	}
 	return hash
 }

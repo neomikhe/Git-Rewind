@@ -42,8 +42,6 @@ func TestDescribe(t *testing.T) {
 	}
 }
 
-// operationOf mirrors gitexec's reflog parsing (the operation is the text before
-// the first colon) so these tests build events the way real reflog entries do.
 func operationOf(subject string) string {
 	before, _, _ := strings.Cut(subject, ":")
 	return strings.TrimSpace(before)

@@ -7,19 +7,13 @@ import (
 	"github.com/neomikhe/git-rewind/core/timeline"
 )
 
-// RecoverAfterResetHard moves the branch back to the commit discarded by a
-// reset --hard, bringing the lost work back onto the branch.
+// RecoverAfterResetHard moves the branch back onto the commit a reset --hard discarded.
 type RecoverAfterResetHard struct{}
 
-// Name implements Recipe.
 func (RecoverAfterResetHard) Name() string { return "recover-after-reset-hard" }
 
-// Title implements Recipe.
 func (RecoverAfterResetHard) Title() string { return "Recover commits discarded by reset --hard" }
 
-// Detect implements Recipe. It applies only when the most recent operation was
-// a reset that left a commit recoverable, so HEAD is still on the affected
-// branch and the rescue cannot move an unrelated branch.
 func (RecoverAfterResetHard) Detect(_ context.Context, repo *Repo) (*safety.Plan, error) {
 	if len(repo.Events) == 0 {
 		return nil, nil

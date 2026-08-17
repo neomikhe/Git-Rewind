@@ -121,7 +121,7 @@ func TestDryRunChangesNothing(t *testing.T) {
 		t.Fatal("recipe did not apply to its scenario")
 	}
 
-	res, err := safety.Apply(context.Background(), repo.Git, *plan, safety.Options{}) // dry run
+	res, err := safety.Apply(context.Background(), repo.Git, *plan, safety.Options{})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestDryRunChangesNothing(t *testing.T) {
 }
 
 func TestDetectReturnsNilWhenNotApplicable(t *testing.T) {
-	dir, _ := twoCommitRepo(t) // a healthy repo: no amend, reset, merge, or rebase
+	dir, _ := twoCommitRepo(t)
 	repo := loadRepo(t, dir)
 
 	for _, r := range []Recipe{UndoAmend{}, RecoverAfterResetHard{}, UndoMerge{}, UndoRebase{}, RestoreDeletedBranch{}} {
@@ -148,10 +148,6 @@ func TestDetectReturnsNilWhenNotApplicable(t *testing.T) {
 	}
 }
 
-// TestResetRecipesRequireRecentMistake guards against the reset-based rescues
-// moving an unrelated branch: after the mistake, switching branches must stop
-// them from applying, because they would otherwise reset whatever branch is
-// currently checked out.
 func TestResetRecipesRequireRecentMistake(t *testing.T) {
 	cases := []struct {
 		scenario string
@@ -208,7 +204,7 @@ func TestUndoMergeIgnoresFastForward(t *testing.T) {
 	writeFile(t, dir, "a\nb\n")
 	run("commit", "-q", "-am", "B")
 	run("checkout", "-q", "main")
-	run("merge", "-q", "feature") // fast-forward: no merge commit is created
+	run("merge", "-q", "feature")
 	repo := loadRepo(t, dir)
 
 	plan, err := UndoMerge{}.Detect(context.Background(), repo)
@@ -243,8 +239,6 @@ func TestRescueBacksUpPreRescueState(t *testing.T) {
 		t.Errorf("HEAD = %s after recovery, want %s", head, built.Anchors["lost"])
 	}
 }
-
-// --- test helpers ---
 
 func runRecipe(t *testing.T, repo *Repo, r Recipe) {
 	t.Helper()
@@ -301,8 +295,6 @@ func revParse(t *testing.T, git *gitexec.Runner, ref string) string {
 	return strings.TrimSpace(out)
 }
 
-// newRepo initializes an empty repository with a hermetic git environment and
-// returns its path and a runner for further git commands.
 func newRepo(t *testing.T) (dir string, run func(args ...string) string) {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {

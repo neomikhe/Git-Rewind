@@ -7,19 +7,13 @@ import (
 	"github.com/neomikhe/git-rewind/core/timeline"
 )
 
-// UndoAmend restores the commit as it was before the most recent amend, keeping
-// the amended changes staged.
+// UndoAmend restores the commit as it was before the most recent amend.
 type UndoAmend struct{}
 
-// Name implements Recipe.
 func (UndoAmend) Name() string { return "undo-amend" }
 
-// Title implements Recipe.
 func (UndoAmend) Title() string { return "Undo the last amend" }
 
-// Detect implements Recipe. It applies only when the most recent operation was
-// an amend that left the original commit recoverable, so HEAD is still on the
-// affected branch and the rescue cannot move an unrelated branch.
 func (UndoAmend) Detect(_ context.Context, repo *Repo) (*safety.Plan, error) {
 	if len(repo.Events) == 0 {
 		return nil, nil

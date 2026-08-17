@@ -1,5 +1,3 @@
-// Package safety enforces git-rewind's safety guarantees: it creates a backup
-// branch (backup/rewind-<timestamp>) before any destructive operation, verifies
-// the working tree, and powers the dry-run mode that prints the exact commands
-// before they run. Backups are created even when confirmation is skipped.
+// Package safety enforces git-rewind's guarantees: a backup branch before any destructive
+// operation, dry-run by default, and working-tree checks. Backups are never skipped.
 package safety

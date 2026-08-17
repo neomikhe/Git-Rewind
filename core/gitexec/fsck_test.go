@@ -29,8 +29,6 @@ func TestParseDanglingCommits(t *testing.T) {
 	}
 }
 
-// TestOrphansFindsResetHardCommit builds a repo, discards a commit with
-// reset --hard, and checks Orphans reports that commit as recoverable.
 func TestOrphansFindsResetHardCommit(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH")
@@ -51,7 +49,7 @@ func TestOrphansFindsResetHardCommit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reflog: %v", err)
 	}
-	lost := before[0].Hash // the second commit is the current HEAD
+	lost := before[0].Hash
 
 	runGit(t, dir, base.Add(2*time.Hour), "reset", "--hard", "HEAD~1")
 

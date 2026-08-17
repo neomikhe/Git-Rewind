@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-// TestScenariosProduceBrokenState builds every scenario in a fresh repository
-// and checks that it ended up in the expected broken (but recoverable) state.
-// This is the trust foundation the rescue recipes build on.
 func TestScenariosProduceBrokenState(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH")
@@ -26,8 +23,6 @@ func TestScenariosProduceBrokenState(t *testing.T) {
 	}
 }
 
-// TestAllScenariosAreWellFormed guards the registry itself: names must be unique
-// and non-empty, and every scenario must supply both a builder and a verifier.
 func TestAllScenariosAreWellFormed(t *testing.T) {
 	seen := make(map[string]bool)
 	for _, s := range All() {

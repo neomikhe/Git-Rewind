@@ -110,16 +110,12 @@ func TestAttachOrphans(t *testing.T) {
 
 	AttachOrphans(events, map[string]struct{}{"lostcommit": {}})
 
-	// The reset points at newhead but its previous value (lostcommit) is
-	// orphaned, so it should be attached there.
 	if got := events[0].Orphaned; len(got) != 1 || got[0] != "lostcommit" {
 		t.Errorf("reset event Orphaned = %v, want [lostcommit]", got)
 	}
-	// A plain commit cannot orphan anything.
 	if events[1].Orphaned != nil {
 		t.Errorf("commit event Orphaned = %v, want nil", events[1].Orphaned)
 	}
-	// The oldest entry has no previous value to consider.
 	if events[2].Orphaned != nil {
 		t.Errorf("oldest event Orphaned = %v, want nil", events[2].Orphaned)
 	}
@@ -131,16 +127,12 @@ func TestAttachOrphansIgnoresUnorphanedPrevious(t *testing.T) {
 		{Index: 1, Operation: "commit", Hash: "stillreachable"},
 	})
 
-	// The previous value is not in the orphan set, so nothing is attached.
 	AttachOrphans(events, map[string]struct{}{"somethingelse": {}})
 	if events[0].Orphaned != nil {
 		t.Errorf("Orphaned = %v, want nil when previous value is not orphaned", events[0].Orphaned)
 	}
 }
 
-// TestFromReflogOnRealResetHard ties the parser and classifier together on a
-// real repository: the reset-hard scenario must surface a red reset as the most
-// recent event, with the discarded commit attached as recoverable.
 func TestFromReflogOnRealResetHard(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found in PATH")

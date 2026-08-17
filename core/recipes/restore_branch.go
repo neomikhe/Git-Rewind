@@ -7,19 +7,13 @@ import (
 	"github.com/neomikhe/git-rewind/core/timeline"
 )
 
-// RestoreDeletedBranch recreates a branch that was deleted, pointing it at the
-// last commit it held. It reads the reflog for a "checkout: moving from <branch>
-// to ..." entry whose branch no longer exists but whose tip is still recoverable.
+// RestoreDeletedBranch recreates a deleted branch at the last commit it held.
 type RestoreDeletedBranch struct{}
 
-// Name implements Recipe.
 func (RestoreDeletedBranch) Name() string { return "restore-deleted-branch" }
 
-// Title implements Recipe.
 func (RestoreDeletedBranch) Title() string { return "Restore a deleted branch" }
 
-// Detect implements Recipe. It applies when the reflog shows a branch we left
-// that no longer exists and whose tip commit is still present.
 func (RestoreDeletedBranch) Detect(ctx context.Context, repo *Repo) (*safety.Plan, error) {
 	for i, e := range repo.Events {
 		if e.Kind != timeline.KindCheckout {
@@ -30,7 +24,7 @@ func (RestoreDeletedBranch) Detect(ctx context.Context, repo *Repo) (*safety.Pla
 			continue
 		}
 		if refExists(ctx, repo.Git, "refs/heads/"+from) {
-			continue // the branch still exists; nothing to restore
+			continue
 		}
 		tip := previousHash(repo.Events, i)
 		if tip == "" || !commitExists(ctx, repo.Git, tip) {
