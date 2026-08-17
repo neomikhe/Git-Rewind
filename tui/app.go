@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/neomikhe/git-rewind/core/gitexec"
+	"github.com/neomikhe/git-rewind/core/i18n"
 	"github.com/neomikhe/git-rewind/core/recipes"
 	"github.com/neomikhe/git-rewind/core/safety"
 	"github.com/neomikhe/git-rewind/core/timeline"
@@ -31,9 +32,10 @@ var errDirtyTree = errors.New("uncommitted changes would be discarded; press f t
 
 // Session is the repository state the TUI works on.
 type Session struct {
-	Git    *gitexec.Runner
-	Events []timeline.Event
-	Limit  int
+	Git     *gitexec.Runner
+	Events  []timeline.Event
+	Limit   int
+	Printer *i18n.Printer
 }
 
 // Run launches the timeline TUI and blocks until the user quits.
@@ -90,6 +92,9 @@ type model struct {
 }
 
 func newModel(s Session) model {
+	if s.Printer == nil {
+		s.Printer = i18n.New(i18n.EN)
+	}
 	return model{session: s, now: time.Now()}
 }
 

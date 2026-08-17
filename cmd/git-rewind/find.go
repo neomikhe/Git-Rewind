@@ -9,7 +9,9 @@ import (
 	"strings"
 
 	"github.com/neomikhe/git-rewind/core/gitexec"
+	"github.com/neomikhe/git-rewind/core/i18n"
 	"github.com/neomikhe/git-rewind/core/search"
+	"github.com/neomikhe/git-rewind/core/timeline"
 )
 
 const (
@@ -17,7 +19,7 @@ const (
 	rescuePrefix    = "rescued/"
 )
 
-func runFind(args []string, dir string, stdout io.Writer) error {
+func runFind(args []string, dir string, stdout io.Writer, p *i18n.Printer) error {
 	fs := flag.NewFlagSet("find", flag.ContinueOnError)
 	fs.SetOutput(stdout)
 	messagesOnly := fs.Bool("messages", false, "search commit messages only, not file contents (faster on large repositories)")
@@ -31,7 +33,7 @@ func runFind(args []string, dir string, stdout io.Writer) error {
 
 	query := strings.TrimSpace(strings.Join(append(leading, fs.Args()...), " "))
 	if query == "" {
-		return errors.New("nothing to look for (try: git rewind find \"the text you lost\")")
+		return errors.New(p.T(i18n.FindNoQuery))
 	}
 
 	result, err := search.Find(context.Background(), gitexec.New(dir), query, search.Options{
@@ -52,7 +54,7 @@ func runFind(args []string, dir string, stdout io.Writer) error {
 			Matches:   toJSONMatches(result.Matches),
 		})
 	}
-	return flush(stdout, describeSearch(result))
+	return flush(stdout, describeSearch(p, result))
 }
 
 func splitLeadingText(args []string) (text, rest []string) {
@@ -64,46 +66,47 @@ func splitLeadingText(args []string) (text, rest []string) {
 	return args, nil
 }
 
-func describeSearch(r search.Result) string {
+func describeSearch(p *i18n.Printer, r search.Result) string {
 	if len(r.Matches) == 0 {
-		return nothingFound(r)
+		return nothingFound(p, r)
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "Found %s matching %q, out of %s no branch or tag reaches.\n",
-		plural(len(r.Matches), "commit", "commits"),
+	b.WriteString(p.T(i18n.FindHeading,
 		r.Query,
-		plural(r.Inspected, "commit", "commits"))
+		timeline.CommitCount(p, len(r.Matches)),
+		timeline.CommitCount(p, r.Inspected)))
 
 	for _, m := range r.Matches {
 		b.WriteString("\n" + matchHeading(m) + "\n")
 		if m.InMessage {
-			b.WriteString("      the commit message matches\n")
+			b.WriteString(p.T(i18n.FindMessageMatches))
 		}
 		for _, hit := range m.InFiles {
 			fmt.Fprintf(&b, "      %s:%d  %s\n", hit.Path, hit.Line, clip(strings.TrimSpace(hit.Text)))
 		}
-		fmt.Fprintf(&b, "      keep it with: git branch %s%s %s\n",
-			rescuePrefix, shortHash(m.Commit.Hash), m.Commit.Hash)
+		b.WriteString(p.T(i18n.FindKeepWith, rescuePrefix+shortHash(m.Commit.Hash), m.Commit.Hash))
 	}
 
-	b.WriteString("\nThat command only adds a branch pointing at the commit; nothing else changes.\n")
+	b.WriteString(p.T(i18n.FindOnlyAddsBranch))
 	if r.Truncated() {
-		fmt.Fprintf(&b, "Only the %d most recent of %d unreachable commits were searched; raise --limit to widen it.\n",
-			r.Inspected, r.Orphans)
+		b.WriteString(p.T(i18n.FindTruncated, r.Inspected, r.Orphans))
 	}
 	return b.String()
 }
 
-func nothingFound(r search.Result) string {
+func nothingFound(p *i18n.Printer, r search.Result) string {
 	if r.Orphans == 0 {
-		return "git-rewind: no unreachable commits in this repository, so there is nothing lost to search.\n"
+		return p.T(i18n.FindNoOrphans)
 	}
-	return fmt.Sprintf("git-rewind: nothing matching %q in the %s searched.\n\n"+
-		"Git expires unreachable objects after 90 days by default, so work lost long ago may\n"+
-		"already be gone. Searching file contents as well as messages is the default; --messages\n"+
-		"restricts it to messages.\n",
-		r.Query, plural(r.Inspected, "unreachable commit", "unreachable commits"))
+	return p.T(i18n.FindNoMatch, r.Query, unreachableCount(p, r.Inspected))
+}
+
+func unreachableCount(p *i18n.Printer, n int) string {
+	if n == 1 {
+		return p.T(i18n.FindUnreachableSingular, n)
+	}
+	return p.T(i18n.FindUnreachablePlural, n)
 }
 
 func matchHeading(m search.Match) string {
@@ -126,11 +129,4 @@ func shortHash(hash string) string {
 		return hash[:shortHashLen]
 	}
 	return hash
-}
-
-func plural(n int, singular, plural string) string {
-	if n == 1 {
-		return "1 " + singular
-	}
-	return fmt.Sprintf("%d %s", n, plural)
 }

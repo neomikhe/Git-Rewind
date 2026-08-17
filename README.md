@@ -132,7 +132,7 @@ the file contents at that commit:
 
 ```console
 $ git rewind find "parseInvoiceTotal"
-Found 1 commit matching "parseInvoiceTotal", out of 1 commit no branch or tag reaches.
+Matches for "parseInvoiceTotal": 1 commit, out of 1 commit no branch or tag reaches.
 
   3afd6f3  2026-08-14 16:02  Ada Lovelace  "add the invoice parser I spent all afternoon on"
       billing.go:3  func parseInvoiceTotal(raw string) (int, error) {
@@ -297,6 +297,26 @@ go test ./...            # the full suite
 golangci-lint run ./...  # lint (gosec included)
 ```
 
+## Language
+
+git-rewind speaks English and Spanish. It picks the language from `GIT_REWIND_LANG`, then a
+`language` key in `git-rewind/config.json` inside your OS configuration directory, then your
+`LANG`/`LC_ALL` locale, falling back to English.
+
+```console
+$ GIT_REWIND_LANG=es git rewind explain
+Estado del repositorio
+
+  HEAD             en la rama main, en d7f8831
+  Área de trabajo  1 cambio sin commitear — la rama de copia de seguridad no los conserva
+  Último evento    hace 1m  Moviste la rama a HEAD~1 (1 commit quedó sin rama, se puede recuperar)
+  Inalcanzable     1 commit que ninguna rama ni etiqueta alcanza, todavía recuperable
+```
+
+Git's own words are never translated — refs, hashes and the commands a rescue will run stay
+exactly as you would type them. The rescue titles and the interactive interface are still
+English-only.
+
 ## Status
 
 Pre-release and under active development. The engine, the rescues and both front ends work
@@ -349,5 +369,10 @@ Respaldándolo: **7 rescates y 7 repositorios rotos reproducibles**, con tests d
 que rompen un repositorio de verdad y comprueban que el rescate lo arregla. CI en Linux,
 macOS y Windows.
 
-La interfaz de la herramienta está en inglés por ahora; la traducción al español está
-planificada para la v1.0.
+**La herramienta ya habla español.** Se elige el idioma con `GIT_REWIND_LANG=es`, o dejando
+`{"language": "es"}` en `git-rewind/config.json` dentro de tu directorio de configuración; si
+no, se detecta desde `LANG`. Los comandos `last`, `find` y `explain` y las descripciones de la
+línea de tiempo ya están traducidos; los títulos de los rescates y la interfaz interactiva
+siguen en inglés por ahora.
+
+Los comandos de git, las ramas y los hashes nunca se traducen: son lo que vas a teclear.

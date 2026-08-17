@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/neomikhe/git-rewind/core/gitexec"
+	"github.com/neomikhe/git-rewind/core/i18n"
 )
 
 func TestRelativeTime(t *testing.T) {
@@ -32,11 +33,25 @@ func TestRelativeTime(t *testing.T) {
 
 func TestAgoPhrase(t *testing.T) {
 	now := time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC)
-	if got := AgoPhrase(now.Add(-10*time.Second), now); got != "just now" {
-		t.Errorf("AgoPhrase = %q, want %q", got, "just now")
+	english, spanish := i18n.New(i18n.EN), i18n.New(i18n.ES)
+
+	cases := []struct {
+		name    string
+		printer *i18n.Printer
+		at      time.Time
+		want    string
+	}{
+		{"english just now", english, now.Add(-10 * time.Second), "just now"},
+		{"english hours", english, now.Add(-3 * time.Hour), "3h ago"},
+		{"spanish just now", spanish, now.Add(-10 * time.Second), "ahora mismo"},
+		{"spanish hours", spanish, now.Add(-3 * time.Hour), "hace 3h"},
 	}
-	if got := AgoPhrase(now.Add(-3*time.Hour), now); got != "3h ago" {
-		t.Errorf("AgoPhrase = %q, want %q", got, "3h ago")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := AgoPhrase(c.printer, c.at, now); got != c.want {
+				t.Errorf("AgoPhrase = %q, want %q", got, c.want)
+			}
+		})
 	}
 }
 
@@ -68,10 +83,47 @@ func TestDescribe(t *testing.T) {
 			events := FromReflog([]gitexec.ReflogEntry{{Subject: c.subject, Operation: operationOf(c.subject)}})
 			e := events[0]
 			e.Orphaned = c.orphaned
-			if got := e.Describe(); got != c.want {
+			if got := e.Describe(i18n.New(i18n.EN)); got != c.want {
 				t.Errorf("Describe() = %q, want %q", got, c.want)
 			}
 		})
+	}
+}
+
+func TestDescribeInSpanish(t *testing.T) {
+	spanish := i18n.New(i18n.ES)
+	cases := []struct {
+		subject  string
+		orphaned []string
+		want     string
+	}{
+		{"reset: moving to HEAD~1", nil, "Moviste la rama a HEAD~1"},
+		{"checkout: moving from main to feature", nil, "Cambiaste de main a feature"},
+		{"commit: add the parser", nil, `Hiciste commit "add the parser"`},
+		{"reset: moving to HEAD~1", []string{"abc"}, "Moviste la rama a HEAD~1 (1 commit quedó sin rama, se puede recuperar)"},
+		{"reset: moving to HEAD~2", []string{"abc", "def"}, "Moviste la rama a HEAD~2 (2 commits quedaron sin rama, se pueden recuperar)"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.subject, func(t *testing.T) {
+			events := FromReflog([]gitexec.ReflogEntry{{Subject: c.subject, Operation: operationOf(c.subject)}})
+			e := events[0]
+			e.Orphaned = c.orphaned
+			if got := e.Describe(spanish); got != c.want {
+				t.Errorf("Describe(es) = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestUnknownOperationKeepsGitsOwnWordsInEveryLanguage(t *testing.T) {
+	const subject = "gc: prune expired objects"
+	events := FromReflog([]gitexec.ReflogEntry{{Subject: subject, Operation: operationOf(subject)}})
+
+	for _, lang := range []i18n.Lang{i18n.EN, i18n.ES} {
+		if got := events[0].Describe(i18n.New(lang)); got != subject {
+			t.Errorf("Describe(%s) = %q, want git's own words %q", lang, got, subject)
+		}
 	}
 }
 

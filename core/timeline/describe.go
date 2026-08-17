@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/neomikhe/git-rewind/core/i18n"
 )
 
 const hoursPerDay = 24
@@ -24,60 +26,91 @@ func RelativeTime(t, now time.Time) string {
 }
 
 // AgoPhrase renders RelativeTime as a phrase: "just now", "3h ago".
-func AgoPhrase(t, now time.Time) string {
+func AgoPhrase(p *i18n.Printer, t, now time.Time) string {
 	if rel := RelativeTime(t, now); rel != "now" {
-		return rel + " ago"
+		return p.T(i18n.TimeAgo, rel)
 	}
-	return "just now"
+	return p.T(i18n.TimeJustNow)
 }
 
 // Describe returns a plain-language description of the event and what it left recoverable.
-func (e Event) Describe() string {
-	base := describeOperation(e)
-	if n := len(e.Orphaned); n > 0 {
-		base += fmt.Sprintf(" (%s left unreachable, recoverable)", plural(n, "commit", "commits"))
+func (e Event) Describe(p *i18n.Printer) string {
+	base := describeOperation(e, p)
+	switch n := len(e.Orphaned); {
+	case n == 1:
+		base += p.T(i18n.EventOrphanSuffixOne, n)
+	case n > 1:
+		base += p.T(i18n.EventOrphanSuffixMany, n)
 	}
 	return base
 }
 
-func describeOperation(e Event) string {
+// CommitCount renders a commit total with the right singular or plural form.
+func CommitCount(p *i18n.Printer, n int) string {
+	if n == 1 {
+		return p.T(i18n.CommitSingular, n)
+	}
+	return p.T(i18n.CommitPlural, n)
+}
+
+func describeOperation(e Event, p *i18n.Printer) string {
 	detail := detailOf(e.Entry.Subject)
 	switch e.Kind {
 	case KindInitialCommit:
-		return withMessage("Made the first commit", detail)
+		return withMessage(p.T(i18n.EventFirstCommit), detail)
 	case KindCommit:
-		return withMessage("Committed", detail)
+		return withMessage(p.T(i18n.EventCommit), detail)
 	case KindAmend:
-		return withMessage("Amended the last commit", detail)
+		return withMessage(p.T(i18n.EventAmend), detail)
 	case KindReset:
-		return "Reset the branch " + strings.TrimPrefix(detail, "moving ")
+		return resetSentence(p, detail, e.Entry.Subject)
 	case KindCheckout:
-		return "Switched " + strings.TrimPrefix(detail, "moving ")
+		return checkoutSentence(p, detail, e.Entry.Subject)
 	case KindMerge:
-		return mergeSentence(e.Entry.Operation)
+		return mergeSentence(p, e.Entry.Operation)
 	case KindRebase:
-		return "Rebased the branch"
+		return p.T(i18n.EventRebase)
 	case KindPull:
-		return "Pulled from the remote"
+		return p.T(i18n.EventPull)
 	case KindBranch:
-		return "Created a branch"
+		return p.T(i18n.EventBranch)
 	case KindClone:
-		return "Cloned the repository"
+		return p.T(i18n.EventClone)
 	case KindCherryPick:
-		return withMessage("Cherry-picked", detail)
+		return withMessage(p.T(i18n.EventCherryPick), detail)
 	case KindRevert:
-		return withMessage("Reverted", detail)
+		return withMessage(p.T(i18n.EventRevert), detail)
 	default:
 		return e.Entry.Subject
 	}
 }
 
-func mergeSentence(operation string) string {
+func resetSentence(p *i18n.Printer, detail, subject string) string {
+	target, ok := strings.CutPrefix(detail, "moving to ")
+	if !ok {
+		return subject
+	}
+	return p.T(i18n.EventReset, target)
+}
+
+func checkoutSentence(p *i18n.Printer, detail, subject string) string {
+	rest, ok := strings.CutPrefix(detail, "moving from ")
+	if !ok {
+		return subject
+	}
+	from, to, ok := strings.Cut(rest, " to ")
+	if !ok {
+		return subject
+	}
+	return p.T(i18n.EventCheckout, from, to)
+}
+
+func mergeSentence(p *i18n.Printer, operation string) string {
 	target := strings.TrimPrefix(operation, "merge ")
 	if target == "" || target == "merge" {
-		return "Merged"
+		return p.T(i18n.EventMerged)
 	}
-	return "Merged " + target
+	return p.T(i18n.EventMergedInto, target)
 }
 
 func detailOf(subject string) string {
@@ -93,11 +126,4 @@ func withMessage(prefix, message string) string {
 		return prefix
 	}
 	return fmt.Sprintf("%s %q", prefix, message)
-}
-
-func plural(n int, singular, plural string) string {
-	if n == 1 {
-		return "1 " + singular
-	}
-	return fmt.Sprintf("%d %s", n, plural)
 }

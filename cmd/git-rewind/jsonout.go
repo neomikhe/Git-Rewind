@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/neomikhe/git-rewind/core/gitexec"
+	"github.com/neomikhe/git-rewind/core/i18n"
 	"github.com/neomikhe/git-rewind/core/recipes"
 	"github.com/neomikhe/git-rewind/core/safety"
 	"github.com/neomikhe/git-rewind/core/search"
@@ -109,7 +110,7 @@ func toJSONWorkingTree(s safety.Status) jsonWorkingTree {
 	return jsonWorkingTree{Clean: s.Clean, Changes: len(s.Changes)}
 }
 
-func toJSONEvent(e timeline.Event) jsonEvent {
+func toJSONEvent(e timeline.Event, p *i18n.Printer) jsonEvent {
 	orphaned := e.Orphaned
 	if orphaned == nil {
 		orphaned = []string{}
@@ -119,7 +120,7 @@ func toJSONEvent(e timeline.Event) jsonEvent {
 		Time:        e.Entry.Time,
 		Kind:        e.Kind.String(),
 		Risk:        e.Risk.String(),
-		Description: e.Describe(),
+		Description: e.Describe(p),
 		Orphaned:    orphaned,
 	}
 }

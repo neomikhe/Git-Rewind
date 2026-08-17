@@ -14,7 +14,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/neomikhe/git-rewind/core/config"
 	"github.com/neomikhe/git-rewind/core/gitexec"
+	"github.com/neomikhe/git-rewind/core/i18n"
 	"github.com/neomikhe/git-rewind/core/recipes"
 	"github.com/neomikhe/git-rewind/core/safety"
 	"github.com/neomikhe/git-rewind/core/timeline"
@@ -40,18 +42,20 @@ func main() {
 }
 
 func run(args []string, dir string, stdout io.Writer) error {
+	p := newPrinter()
+
 	if len(args) > 0 {
 		switch args[0] {
 		case "last":
-			return runLast(args[1:], dir, stdout)
+			return runLast(args[1:], dir, stdout, p)
 		case "find":
-			return runFind(args[1:], dir, stdout)
+			return runFind(args[1:], dir, stdout, p)
 		case "explain":
-			return runExplain(args[1:], dir, stdout)
+			return runExplain(args[1:], dir, stdout, p)
 		case "version", "--version", "-v":
 			return flush(stdout, versionLine())
 		default:
-			return fmt.Errorf("unknown command %q (try \"git rewind\", or its \"last\", \"find\", \"explain\" and \"version\" subcommands)", args[0])
+			return fmt.Errorf(p.T(i18n.RootUnknownCommand), args[0])
 		}
 	}
 
@@ -61,12 +65,20 @@ func run(args []string, dir string, stdout io.Writer) error {
 		return err
 	}
 	if len(events) == 0 {
-		return flush(stdout, "git-rewind: no repository history to show yet.\n")
+		return flush(stdout, p.T(i18n.RootNoHistory))
 	}
-	return tui.Run(tui.Session{Git: git, Events: events, Limit: tui.PageSize})
+	return tui.Run(tui.Session{Git: git, Events: events, Limit: tui.PageSize, Printer: p})
 }
 
-func runLast(args []string, dir string, stdout io.Writer) error {
+func newPrinter() *i18n.Printer {
+	cfg, err := config.Load()
+	if err != nil {
+		cfg = config.Config{}
+	}
+	return i18n.New(i18n.Resolve("", cfg.Language, os.Getenv))
+}
+
+func runLast(args []string, dir string, stdout io.Writer, p *i18n.Printer) error {
 	fs := flag.NewFlagSet("last", flag.ContinueOnError)
 	fs.SetOutput(stdout)
 	apply := fs.Bool("yes", false, "apply the rescue; without this it is a dry run that only prints the commands")
@@ -92,7 +104,7 @@ func runLast(args []string, dir string, stdout io.Writer) error {
 		if *asJSON {
 			return writeJSON(stdout, jsonLast{Schema: jsonSchema, Command: "last", DryRun: !*apply})
 		}
-		return flush(stdout, "git-rewind: nothing to undo — no rescue applies to the recent history.\n")
+		return flush(stdout, p.T(i18n.LastNothingToUndo))
 	}
 
 	status, err := safety.WorkingTreeStatus(ctx, git)
@@ -102,7 +114,7 @@ func runLast(args []string, dir string, stdout io.Writer) error {
 	dirtyRisk := plan.DiscardsChanges && !status.Clean
 
 	if !*asJSON {
-		if err := flush(stdout, describePlan(recipe, plan, dirtyRisk)); err != nil {
+		if err := flush(stdout, describePlan(p, recipe, plan, dirtyRisk)); err != nil {
 			return err
 		}
 	}
@@ -111,10 +123,10 @@ func runLast(args []string, dir string, stdout io.Writer) error {
 		if *asJSON {
 			return writeJSON(stdout, lastResult(recipe, plan, status, true, ""))
 		}
-		return flush(stdout, "\nDry run. Re-run with --yes to apply it; a backup branch is always created first.\n")
+		return flush(stdout, p.T(i18n.LastDryRun))
 	}
 	if dirtyRisk && !*force {
-		return errors.New("aborted: uncommitted changes would be discarded; commit or stash them, or re-run with --force")
+		return errors.New(p.T(i18n.LastAbortedDirty))
 	}
 
 	res, err := safety.Apply(ctx, git, *plan, safety.Options{Execute: true, Now: time.Now()})
@@ -124,7 +136,7 @@ func runLast(args []string, dir string, stdout io.Writer) error {
 	if *asJSON {
 		return writeJSON(stdout, lastResult(recipe, plan, status, false, res.BackupBranch))
 	}
-	return flush(stdout, fmt.Sprintf("\nDone. The previous state is saved on branch %s.\n", res.BackupBranch))
+	return flush(stdout, p.T(i18n.LastDone, res.BackupBranch))
 }
 
 func chooseRescue(ctx context.Context, repo *recipes.Repo) (recipes.Recipe, *safety.Plan, error) {
@@ -140,9 +152,10 @@ func chooseRescue(ctx context.Context, repo *recipes.Repo) (recipes.Recipe, *saf
 	return nil, nil, nil
 }
 
-func describePlan(recipe recipes.Recipe, plan *safety.Plan, dirtyRisk bool) string {
+func describePlan(p *i18n.Printer, recipe recipes.Recipe, plan *safety.Plan, dirtyRisk bool) string {
 	var b strings.Builder
-	b.WriteString("Rescue: " + recipe.Title() + "\n\nWill run:\n")
+	b.WriteString(p.T(i18n.LastRescueHeading, recipe.Title()))
+	b.WriteString(p.T(i18n.LastWillRun))
 	for _, cmd := range plan.Preview() {
 		b.WriteString("  " + cmd + "\n")
 	}
@@ -150,7 +163,7 @@ func describePlan(recipe recipes.Recipe, plan *safety.Plan, dirtyRisk bool) stri
 		b.WriteString("\n  " + w + "\n")
 	}
 	if dirtyRisk {
-		b.WriteString("\n  ! You have uncommitted changes. They are NOT saved to the backup and would be lost.\n")
+		b.WriteString(p.T(i18n.LastDirtyWarning))
 	}
 	return b.String()
 }

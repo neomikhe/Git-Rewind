@@ -15,12 +15,12 @@ func (m model) detailView() string {
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("Event " + selectorOf(e.Entry)))
 	b.WriteString("\n\n")
-	b.WriteString(field("When", fmt.Sprintf("%s (%s)", e.Entry.Time.Format("2006-01-02 15:04:05 MST"), timeline.AgoPhrase(e.Entry.Time, m.now))))
+	b.WriteString(field("When", fmt.Sprintf("%s (%s)", e.Entry.Time.Format("2006-01-02 15:04:05 MST"), timeline.AgoPhrase(m.session.Printer, e.Entry.Time, m.now))))
 	b.WriteString(field("Kind", e.Kind.String()))
 	b.WriteString(field("Risk", riskStyle(e.Risk).Render(e.Risk.String())))
 	b.WriteString(field("Commit", shortHash(e.Entry.Hash)))
 	b.WriteString(field("Who", e.Entry.ActorName))
-	b.WriteString(field("What", e.Describe()))
+	b.WriteString(field("What", e.Describe(m.session.Printer)))
 	b.WriteString(field("Reflog", e.Entry.Subject))
 
 	if len(e.Orphaned) > 0 {

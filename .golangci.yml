@@ -20,6 +20,15 @@ linters:
         linters:
           - revive
         text: "exported method"
+      # The Spanish catalogue is not English prose: misspell only knows English, and gosec's
+      # credential heuristic misreads a large map of message literals as a secret.
+      - path: core/i18n/
+        linters:
+          - misspell
+      - path: core/i18n/
+        linters:
+          - gosec
+        text: "G101"
 
 formatters:
   enable:

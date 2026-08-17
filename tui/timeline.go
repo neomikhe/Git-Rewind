@@ -50,7 +50,7 @@ func (m model) renderRow(i int) string {
 	e := m.session.Events[i]
 
 	head := fmt.Sprintf("%-10s %5s  ", selectorOf(e.Entry), timeline.RelativeTime(e.Entry.Time, m.now))
-	tail := fmt.Sprintf("%s  %s", shortHash(e.Entry.Hash), e.Describe())
+	tail := fmt.Sprintf("%s  %s", shortHash(e.Entry.Hash), e.Describe(m.session.Printer))
 
 	marker := "  "
 	if i == m.cursor {

@@ -17,7 +17,8 @@ func TestFindReportsTheLostCommitAndHowToKeepIt(t *testing.T) {
 
 	out := buf.String()
 	for _, want := range []string{
-		"Found 1 commit",
+		"Matches for",
+		"1 commit",
 		"second commit",
 		"the commit message matches",
 		"git branch " + rescuePrefix + shortHash(lost) + " " + lost,
