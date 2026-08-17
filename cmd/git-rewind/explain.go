@@ -61,7 +61,7 @@ func runExplain(args []string, dir string, stdout io.Writer, p *i18n.Printer) er
 	}
 	d.orphans = len(orphans)
 
-	rescue, plan, err := chooseRescue(ctx, &recipes.Repo{Git: git, Events: events})
+	rescue, plan, err := chooseRescue(ctx, &recipes.Repo{Git: git, Events: events, Printer: p})
 	if err != nil {
 		return err
 	}
@@ -79,7 +79,7 @@ func runExplain(args []string, dir string, stdout io.Writer, p *i18n.Printer) er
 			WorkingTree: toJSONWorkingTree(d.status),
 			LastEvent:   &last,
 			Unreachable: d.orphans,
-			Rescue:      toJSONRescue(d.rescue),
+			Rescue:      toJSONRescue(d.rescue, p),
 		})
 	}
 	return flush(stdout, describeState(p, d))
@@ -107,7 +107,7 @@ func describeState(p *i18n.Printer, d diagnosis) string {
 
 	b.WriteString("\n")
 	if d.rescue != nil {
-		b.WriteString(p.T(i18n.ExplainCanUndo, d.rescue.Title()))
+		b.WriteString(p.T(i18n.ExplainCanUndo, d.rescue.Title(p)))
 		b.WriteString(p.T(i18n.ExplainReviewHint))
 	}
 	if d.orphans > 0 {

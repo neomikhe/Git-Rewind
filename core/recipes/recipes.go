@@ -5,22 +5,33 @@ import (
 	"strings"
 
 	"github.com/neomikhe/git-rewind/core/gitexec"
+	"github.com/neomikhe/git-rewind/core/i18n"
 	"github.com/neomikhe/git-rewind/core/safety"
 	"github.com/neomikhe/git-rewind/core/timeline"
 )
 
 const shortHashLen = 7
 
-// Repo is the repository state a recipe inspects: a git runner plus the classified timeline.
+// Repo is the repository state a recipe inspects: a git runner, the classified timeline, and
+// the printer its user-facing wording goes through.
 type Repo struct {
-	Git    *gitexec.Runner
-	Events []timeline.Event
+	Git     *gitexec.Runner
+	Events  []timeline.Event
+	Printer *i18n.Printer
+}
+
+// Say returns the repository's printer, defaulting to English when none was supplied.
+func (r *Repo) Say() *i18n.Printer {
+	if r.Printer == nil {
+		r.Printer = i18n.New(i18n.EN)
+	}
+	return r.Printer
 }
 
 // Recipe is one rescue scenario and the project's extension point; recipes detect, never execute.
 type Recipe interface {
 	Name() string
-	Title() string
+	Title(p *i18n.Printer) string
 	// Detect returns a plan when the recipe applies, or a nil plan when it does not.
 	Detect(ctx context.Context, repo *Repo) (*safety.Plan, error)
 }

@@ -313,9 +313,9 @@ Estado del repositorio
   Inalcanzable     1 commit que ninguna rama ni etiqueta alcanza, todavía recuperable
 ```
 
-Git's own words are never translated — refs, hashes and the commands a rescue will run stay
-exactly as you would type them. The rescue titles and the interactive interface are still
-English-only.
+Everything you read is translated, including the rescue titles, their warnings and the whole
+interactive interface. Git's own words never are: refs, hashes and the commands a rescue will
+run stay exactly as you would type them.
 
 ## Status
 
@@ -369,10 +369,10 @@ Respaldándolo: **7 rescates y 7 repositorios rotos reproducibles**, con tests d
 que rompen un repositorio de verdad y comprueban que el rescate lo arregla. CI en Linux,
 macOS y Windows.
 
-**La herramienta ya habla español.** Se elige el idioma con `GIT_REWIND_LANG=es`, o dejando
-`{"language": "es"}` en `git-rewind/config.json` dentro de tu directorio de configuración; si
-no, se detecta desde `LANG`. Los comandos `last`, `find` y `explain` y las descripciones de la
-línea de tiempo ya están traducidos; los títulos de los rescates y la interfaz interactiva
-siguen en inglés por ahora.
+**La herramienta habla español entero**: la línea de tiempo, los tres comandos, los títulos y
+avisos de los rescates y toda la interfaz interactiva. Se elige el idioma con
+`GIT_REWIND_LANG=es`, o dejando `{"language": "es"}` en `git-rewind/config.json` dentro de tu
+directorio de configuración; si no, se detecta desde `LANG`.
 
-Los comandos de git, las ramas y los hashes nunca se traducen: son lo que vas a teclear.
+Los comandos de git, las ramas y los hashes nunca se traducen: son exactamente lo que vas a
+teclear.

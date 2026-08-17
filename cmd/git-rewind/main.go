@@ -94,7 +94,7 @@ func runLast(args []string, dir string, stdout io.Writer, p *i18n.Printer) error
 	if err != nil {
 		return err
 	}
-	repo := &recipes.Repo{Git: git, Events: events}
+	repo := &recipes.Repo{Git: git, Events: events, Printer: p}
 
 	recipe, plan, err := chooseRescue(ctx, repo)
 	if err != nil {
@@ -121,7 +121,7 @@ func runLast(args []string, dir string, stdout io.Writer, p *i18n.Printer) error
 
 	if !*apply {
 		if *asJSON {
-			return writeJSON(stdout, lastResult(recipe, plan, status, true, ""))
+			return writeJSON(stdout, lastResult(p, recipe, plan, status, true, ""))
 		}
 		return flush(stdout, p.T(i18n.LastDryRun))
 	}
@@ -134,7 +134,7 @@ func runLast(args []string, dir string, stdout io.Writer, p *i18n.Printer) error
 		return err
 	}
 	if *asJSON {
-		return writeJSON(stdout, lastResult(recipe, plan, status, false, res.BackupBranch))
+		return writeJSON(stdout, lastResult(p, recipe, plan, status, false, res.BackupBranch))
 	}
 	return flush(stdout, p.T(i18n.LastDone, res.BackupBranch))
 }
@@ -154,7 +154,7 @@ func chooseRescue(ctx context.Context, repo *recipes.Repo) (recipes.Recipe, *saf
 
 func describePlan(p *i18n.Printer, recipe recipes.Recipe, plan *safety.Plan, dirtyRisk bool) string {
 	var b strings.Builder
-	b.WriteString(p.T(i18n.LastRescueHeading, recipe.Title()))
+	b.WriteString(p.T(i18n.LastRescueHeading, recipe.Title(p)))
 	b.WriteString(p.T(i18n.LastWillRun))
 	for _, cmd := range plan.Preview() {
 		b.WriteString("  " + cmd + "\n")

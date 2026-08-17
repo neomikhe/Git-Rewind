@@ -28,7 +28,7 @@ var (
 	warnStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true)
 )
 
-var errDirtyTree = errors.New("uncommitted changes would be discarded; press f to apply anyway, or quit and commit or stash them first")
+var errDirtyTree = errors.New("dirty working tree")
 
 // Session is the repository state the TUI works on.
 type Session struct {
@@ -273,7 +273,7 @@ func loadMoreCmd(s Session, limit int) tea.Cmd {
 func detectCmd(s Session) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
-		repo := &recipes.Repo{Git: s.Git, Events: s.Events}
+		repo := &recipes.Repo{Git: s.Git, Events: s.Events, Printer: s.Printer}
 
 		var found []rescue
 		for _, r := range recipes.All() {
@@ -323,11 +323,18 @@ func (m model) footer() string {
 	var b strings.Builder
 	b.WriteString("\n")
 	if m.loading {
-		b.WriteString("Working...\n")
+		b.WriteString(m.say(i18n.TuiWorking))
 	}
 	if m.err != nil {
-		b.WriteString(warnStyle.Render("Error: "+m.err.Error()) + "\n")
+		b.WriteString(warnStyle.Render(m.say(i18n.TuiError, m.errorText())) + "\n")
 	}
 	b.WriteString(helpStyle.Render(m.footerHint()))
 	return b.String()
+}
+
+func (m model) errorText() string {
+	if errors.Is(m.err, errDirtyTree) {
+		return m.say(i18n.TuiErrDirtyTree)
+	}
+	return m.err.Error()
 }

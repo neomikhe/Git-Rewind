@@ -67,5 +67,87 @@ const (
 	RootNoHistory
 	RootUnknownCommand
 
+	RecipeUndoCommitTitle
+	RecipeUndoCommitWarning
+	RecipeUndoCommitStep
+	RecipeUndoCommitHardTitle
+	RecipeUndoCommitHardWarning
+	RecipeUndoCommitHardStep
+	RecipeUndoAmendTitle
+	RecipeUndoAmendWarning
+	RecipeUndoAmendStep
+	RecipeRecoverResetTitle
+	RecipeRecoverResetWarning
+	RecipeRecoverResetStep
+	RecipeRestoreBranchTitle
+	RecipeRestoreBranchWarning
+	RecipeRestoreBranchStep
+	RecipeUndoMergeTitle
+	RecipeUndoMergeWarning
+	RecipeUndoMergeStep
+	RecipeUndoRebaseTitle
+	RecipeUndoRebaseWarning
+	RecipeUndoRebaseStep
+	RecipeRestoreStashTitle
+	RecipeRestoreStashWarning
+	RecipeRestoreStashStep
+
+	TuiTimelineTitle
+	TuiTimelineTitleMore
+	TuiEventTitle
+	TuiFieldWhen
+	TuiFieldKind
+	TuiFieldRisk
+	TuiFieldCommit
+	TuiFieldWho
+	TuiFieldWhat
+	TuiFieldReflog
+	TuiRecoverableHeading
+	TuiRescuesTitle
+	TuiNoRescues
+	TuiDirtyNotice
+	TuiConfirmTitle
+	TuiWillRun
+	TuiBackupPromise
+	TuiConfirmDirty
+	TuiDoneTitle
+	TuiDoneBackup
+	TuiDoneRan
+	TuiDoneRerun
+	TuiWorking
+	TuiError
+	TuiErrDirtyTree
+	TuiHelpTitle
+	TuiHelpSafety
+	TuiHelpFooter
+	TuiScreenTimeline
+	TuiScreenDetail
+	TuiScreenRescues
+	TuiScreenConfirm
+	TuiScreenResult
+	KeyMove
+	KeyMoveTimeline
+	KeyMoveRescues
+	KeyDetails
+	KeyOpenDetail
+	KeyRescues
+	KeyListRescues
+	KeyMore
+	KeyLoadOlder
+	KeyBack
+	KeyBackTimeline
+	KeyBackDetail
+	KeyBackRescues
+	KeyReview
+	KeyReviewCommands
+	KeyApply
+	KeyApplyRescue
+	KeyApplyDiscard
+	KeyApplyDiscardLong
+	KeyQuit
+	KeyQuitLong
+	KeyHelp
+	KeyHelpLong
+
 	numKeys
 )

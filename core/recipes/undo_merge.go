@@ -3,6 +3,7 @@ package recipes
 import (
 	"context"
 
+	"github.com/neomikhe/git-rewind/core/i18n"
 	"github.com/neomikhe/git-rewind/core/safety"
 	"github.com/neomikhe/git-rewind/core/timeline"
 )
@@ -12,20 +13,19 @@ type UndoMerge struct{}
 
 func (UndoMerge) Name() string { return "undo-merge" }
 
-func (UndoMerge) Title() string { return "Undo a merge (back to before the merge)" }
+func (UndoMerge) Title(p *i18n.Printer) string { return p.T(i18n.RecipeUndoMergeTitle) }
 
 func (UndoMerge) Detect(ctx context.Context, repo *Repo) (*safety.Plan, error) {
 	if !refExists(ctx, repo.Git, "HEAD^2") {
 		return nil, nil
 	}
+	p := repo.Say()
 	return &safety.Plan{
 		Commands: []safety.Command{{
 			Args:    []string{"reset", "--hard", "HEAD^1"},
-			Explain: "move the branch back to the first parent, the commit before the merge",
+			Explain: p.T(i18n.RecipeUndoMergeStep),
 		}},
-		Warnings: []string{
-			"Undoes the merge, restoring the state before it (saved to the backup branch first). Any uncommitted changes are discarded.",
-		},
+		Warnings:        []string{p.T(i18n.RecipeUndoMergeWarning)},
 		DiscardsChanges: true,
 	}, nil
 }
@@ -35,7 +35,7 @@ type UndoRebase struct{}
 
 func (UndoRebase) Name() string { return "undo-rebase" }
 
-func (UndoRebase) Title() string { return "Undo a rebase (back to before the rebase)" }
+func (UndoRebase) Title(p *i18n.Printer) string { return p.T(i18n.RecipeUndoRebaseTitle) }
 
 func (UndoRebase) Detect(_ context.Context, repo *Repo) (*safety.Plan, error) {
 	if len(repo.Events) == 0 || repo.Events[0].Kind != timeline.KindRebase {
@@ -48,15 +48,14 @@ func (UndoRebase) Detect(_ context.Context, repo *Repo) (*safety.Plan, error) {
 		return nil, nil
 	}
 	preRebase := repo.Events[i].Orphaned[0]
+	p := repo.Say()
 
 	return &safety.Plan{
 		Commands: []safety.Command{{
 			Args:    []string{"reset", "--hard", preRebase},
-			Explain: "move the branch back to " + shortHash(preRebase) + ", the tip before the rebase",
+			Explain: p.T(i18n.RecipeUndoRebaseStep, shortHash(preRebase)),
 		}},
-		Warnings: []string{
-			"Discards the rebased commits and restores the pre-rebase tip (saved to the backup branch first). Any uncommitted changes are discarded.",
-		},
+		Warnings:        []string{p.T(i18n.RecipeUndoRebaseWarning)},
 		DiscardsChanges: true,
 	}, nil
 }

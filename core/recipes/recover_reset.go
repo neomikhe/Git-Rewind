@@ -3,6 +3,7 @@ package recipes
 import (
 	"context"
 
+	"github.com/neomikhe/git-rewind/core/i18n"
 	"github.com/neomikhe/git-rewind/core/safety"
 	"github.com/neomikhe/git-rewind/core/timeline"
 )
@@ -12,7 +13,9 @@ type RecoverAfterResetHard struct{}
 
 func (RecoverAfterResetHard) Name() string { return "recover-after-reset-hard" }
 
-func (RecoverAfterResetHard) Title() string { return "Recover commits discarded by reset --hard" }
+func (RecoverAfterResetHard) Title(p *i18n.Printer) string {
+	return p.T(i18n.RecipeRecoverResetTitle)
+}
 
 func (RecoverAfterResetHard) Detect(_ context.Context, repo *Repo) (*safety.Plan, error) {
 	if len(repo.Events) == 0 {
@@ -23,15 +26,14 @@ func (RecoverAfterResetHard) Detect(_ context.Context, repo *Repo) (*safety.Plan
 		return nil, nil
 	}
 	lost := reset.Orphaned[0]
+	p := repo.Say()
 
 	return &safety.Plan{
 		Commands: []safety.Command{{
 			Args:    []string{"reset", "--hard", lost},
-			Explain: "move the branch back onto the recovered commit " + shortHash(lost),
+			Explain: p.T(i18n.RecipeRecoverResetStep, shortHash(lost)),
 		}},
-		Warnings: []string{
-			"Moves your branch back to the recovered commit, replacing the current state (which is saved to the backup branch first). Any uncommitted changes are discarded.",
-		},
+		Warnings:        []string{p.T(i18n.RecipeRecoverResetWarning)},
 		DiscardsChanges: true,
 	}, nil
 }

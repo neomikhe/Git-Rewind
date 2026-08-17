@@ -3,6 +3,7 @@ package recipes
 import (
 	"context"
 
+	"github.com/neomikhe/git-rewind/core/i18n"
 	"github.com/neomikhe/git-rewind/core/safety"
 	"github.com/neomikhe/git-rewind/core/timeline"
 )
@@ -12,7 +13,7 @@ type UndoAmend struct{}
 
 func (UndoAmend) Name() string { return "undo-amend" }
 
-func (UndoAmend) Title() string { return "Undo the last amend" }
+func (UndoAmend) Title(p *i18n.Printer) string { return p.T(i18n.RecipeUndoAmendTitle) }
 
 func (UndoAmend) Detect(_ context.Context, repo *Repo) (*safety.Plan, error) {
 	if len(repo.Events) == 0 {
@@ -23,14 +24,13 @@ func (UndoAmend) Detect(_ context.Context, repo *Repo) (*safety.Plan, error) {
 		return nil, nil
 	}
 	original := amend.Orphaned[0]
+	p := repo.Say()
 
 	return &safety.Plan{
 		Commands: []safety.Command{{
 			Args:    []string{"reset", "--soft", original},
-			Explain: "restore the pre-amend commit; the amended changes stay staged",
+			Explain: p.T(i18n.RecipeUndoAmendStep),
 		}},
-		Warnings: []string{
-			"Restores the original commit " + shortHash(original) + " as HEAD and keeps the amended changes staged, so you can recommit them as you meant to.",
-		},
+		Warnings: []string{p.T(i18n.RecipeUndoAmendWarning, shortHash(original))},
 	}, nil
 }

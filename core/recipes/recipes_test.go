@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/neomikhe/git-rewind/core/gitexec"
+	"github.com/neomikhe/git-rewind/core/i18n"
 	"github.com/neomikhe/git-rewind/core/safety"
 	"github.com/neomikhe/git-rewind/core/timeline"
 	"github.com/neomikhe/git-rewind/internal/scenario"
@@ -20,8 +21,13 @@ var fixedNow = time.Date(2026, 7, 7, 10, 0, 0, 0, time.UTC)
 func TestAllRecipesAreWellFormed(t *testing.T) {
 	seen := make(map[string]bool)
 	for _, r := range All() {
-		if r.Name() == "" || r.Title() == "" {
-			t.Errorf("recipe %T has an empty name or title", r)
+		if r.Name() == "" {
+			t.Errorf("recipe %T has an empty name", r)
+		}
+		for _, lang := range []i18n.Lang{i18n.EN, i18n.ES} {
+			if r.Title(i18n.New(lang)) == "" {
+				t.Errorf("recipe %q has no title in %q", r.Name(), lang)
+			}
 		}
 		if seen[r.Name()] {
 			t.Errorf("duplicate recipe name %q", r.Name())

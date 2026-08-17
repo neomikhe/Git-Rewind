@@ -125,11 +125,11 @@ func toJSONEvent(e timeline.Event, p *i18n.Printer) jsonEvent {
 	}
 }
 
-func toJSONRescue(r recipes.Recipe) *jsonRescue {
+func toJSONRescue(r recipes.Recipe, p *i18n.Printer) *jsonRescue {
 	if r == nil {
 		return nil
 	}
-	return &jsonRescue{Name: r.Name(), Title: r.Title()}
+	return &jsonRescue{Name: r.Name(), Title: r.Title(p)}
 }
 
 func toJSONCommands(plan safety.Plan) []jsonCommand {
@@ -141,7 +141,7 @@ func toJSONCommands(plan safety.Plan) []jsonCommand {
 	return commands
 }
 
-func lastResult(recipe recipes.Recipe, plan *safety.Plan, status safety.Status, dryRun bool, backup string) jsonLast {
+func lastResult(p *i18n.Printer, recipe recipes.Recipe, plan *safety.Plan, status safety.Status, dryRun bool, backup string) jsonLast {
 	warnings := plan.Warnings
 	if warnings == nil {
 		warnings = []string{}
@@ -149,7 +149,7 @@ func lastResult(recipe recipes.Recipe, plan *safety.Plan, status safety.Status, 
 	return jsonLast{
 		Schema:           jsonSchema,
 		Command:          "last",
-		Rescue:           toJSONRescue(recipe),
+		Rescue:           toJSONRescue(recipe, p),
 		DryRun:           dryRun,
 		Applied:          !dryRun,
 		DiscardsChanges:  plan.DiscardsChanges,

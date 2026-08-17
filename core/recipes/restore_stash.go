@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/neomikhe/git-rewind/core/gitexec"
+	"github.com/neomikhe/git-rewind/core/i18n"
 	"github.com/neomikhe/git-rewind/core/safety"
 )
 
@@ -20,7 +21,7 @@ type RestoreDroppedStash struct{}
 
 func (RestoreDroppedStash) Name() string { return "restore-dropped-stash" }
 
-func (RestoreDroppedStash) Title() string { return "Restore a dropped stash" }
+func (RestoreDroppedStash) Title(p *i18n.Printer) string { return p.T(i18n.RecipeRestoreStashTitle) }
 
 func (RestoreDroppedStash) Detect(ctx context.Context, repo *Repo) (*safety.Plan, error) {
 	orphans, err := repo.Git.Orphans(ctx)
@@ -31,15 +32,14 @@ func (RestoreDroppedStash) Detect(ctx context.Context, repo *Repo) (*safety.Plan
 	if err != nil || !found {
 		return nil, err
 	}
+	p := repo.Say()
 
 	return &safety.Plan{
 		Commands: []safety.Command{{
 			Args:    []string{"stash", "store", "-m", stash.Subject, stash.Hash},
-			Explain: "put the dropped stash back on the stash list",
+			Explain: p.T(i18n.RecipeRestoreStashStep),
 		}},
-		Warnings: []string{
-			"Restores \"" + stash.Subject + "\" to the stash list. Your working tree is not touched; run \"git stash pop\" when you are ready to apply it.",
-		},
+		Warnings: []string{p.T(i18n.RecipeRestoreStashWarning, stash.Subject)},
 	}, nil
 }
 

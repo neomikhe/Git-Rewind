@@ -1,6 +1,10 @@
 package tui
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/neomikhe/git-rewind/core/i18n"
+)
 
 func (m model) confirmView() string {
 	if len(m.rescues) == 0 {
@@ -9,8 +13,8 @@ func (m model) confirmView() string {
 	selected := m.rescues[m.choice]
 
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Rescue: " + selected.recipe.Title()))
-	b.WriteString("\n\nWill run:\n")
+	b.WriteString(titleStyle.Render(m.say(i18n.TuiConfirmTitle, selected.recipe.Title(m.session.Printer))))
+	b.WriteString(m.say(i18n.TuiWillRun))
 
 	for i, command := range selected.plan.Preview() {
 		b.WriteString("  " + command + "\n")
@@ -19,12 +23,12 @@ func (m model) confirmView() string {
 		}
 	}
 
-	b.WriteString("\n  Your current state is saved to a backup branch before anything runs.\n")
+	b.WriteString(m.say(i18n.TuiBackupPromise))
 	for _, warning := range selected.plan.Warnings {
 		b.WriteString("\n  " + warning + "\n")
 	}
 	if m.discardsUncommitted() {
-		b.WriteString("\n" + warnStyle.Render("  ! You have uncommitted changes. They are NOT saved to the backup and would be lost.") + "\n")
+		b.WriteString("\n" + warnStyle.Render(m.say(i18n.TuiConfirmDirty)) + "\n")
 	}
 
 	b.WriteString(m.footer())
@@ -33,16 +37,16 @@ func (m model) confirmView() string {
 
 func (m model) resultView() string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Done"))
+	b.WriteString(titleStyle.Render(m.say(i18n.TuiDoneTitle)))
 	b.WriteString("\n\n")
 
 	if m.applied != nil {
-		b.WriteString("  Your previous state is saved on branch " + m.applied.BackupBranch + "\n")
-		b.WriteString("\n  Ran:\n")
+		b.WriteString(m.say(i18n.TuiDoneBackup, m.applied.BackupBranch))
+		b.WriteString(m.say(i18n.TuiDoneRan))
 		for _, command := range m.applied.Commands {
 			b.WriteString("    " + command + "\n")
 		}
-		b.WriteString("\n  Re-run git rewind to see the updated timeline.\n")
+		b.WriteString(m.say(i18n.TuiDoneRerun))
 	}
 
 	b.WriteString(m.footer())

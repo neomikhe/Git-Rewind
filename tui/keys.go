@@ -3,6 +3,9 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
+
+	"github.com/neomikhe/git-rewind/core/i18n"
 )
 
 type binding struct {
@@ -12,32 +15,39 @@ type binding struct {
 	primary bool
 }
 
-var (
-	quitBinding = binding{keys: "q", short: "quit", help: "quit git-rewind", primary: true}
-	helpBinding = binding{keys: "?", short: "help", help: "show this help", primary: true}
-)
+func (m model) quitBinding() binding {
+	return binding{keys: "q", short: m.say(i18n.KeyQuit), help: m.say(i18n.KeyQuitLong), primary: true}
+}
+
+func (m model) helpBinding() binding {
+	return binding{keys: "?", short: m.say(i18n.KeyHelp), help: m.say(i18n.KeyHelpLong), primary: true}
+}
+
+func (m model) say(key i18n.Key, args ...any) string {
+	return m.session.Printer.T(key, args...)
+}
 
 func (m model) bindings() []binding {
 	switch m.screen {
 	case screenDetail:
 		return []binding{
-			{keys: "enter", short: "rescues", help: "list the rescues that apply", primary: true},
-			{keys: "esc", short: "back", help: "back to the timeline", primary: true},
-			quitBinding,
-			helpBinding,
+			{keys: "enter", short: m.say(i18n.KeyRescues), help: m.say(i18n.KeyListRescues), primary: true},
+			{keys: "esc", short: m.say(i18n.KeyBack), help: m.say(i18n.KeyBackTimeline), primary: true},
+			m.quitBinding(),
+			m.helpBinding(),
 		}
 	case screenRescues:
 		return []binding{
-			{keys: "up/down, j/k", short: "move", help: "move through the rescues", primary: true},
-			{keys: "enter", short: "review", help: "review the exact commands", primary: true},
-			{keys: "esc", short: "back", help: "back to the event detail", primary: true},
-			quitBinding,
-			helpBinding,
+			{keys: "up/down, j/k", short: m.say(i18n.KeyMove), help: m.say(i18n.KeyMoveRescues), primary: true},
+			{keys: "enter", short: m.say(i18n.KeyReview), help: m.say(i18n.KeyReviewCommands), primary: true},
+			{keys: "esc", short: m.say(i18n.KeyBack), help: m.say(i18n.KeyBackDetail), primary: true},
+			m.quitBinding(),
+			m.helpBinding(),
 		}
 	case screenConfirm:
 		return m.confirmBindings()
 	case screenResult:
-		return []binding{quitBinding, helpBinding}
+		return []binding{m.quitBinding(), m.helpBinding()}
 	default:
 		return m.timelineBindings()
 	}
@@ -45,33 +55,33 @@ func (m model) bindings() []binding {
 
 func (m model) timelineBindings() []binding {
 	b := []binding{
-		{keys: "up/down, j/k", short: "move", help: "move through the timeline", primary: true},
-		{keys: "enter", short: "details", help: "open the event detail", primary: true},
+		{keys: "up/down, j/k", short: m.say(i18n.KeyMove), help: m.say(i18n.KeyMoveTimeline), primary: true},
+		{keys: "enter", short: m.say(i18n.KeyDetails), help: m.say(i18n.KeyOpenDetail), primary: true},
 	}
 	if m.hasMore() {
-		b = append(b, binding{keys: "m", short: "more", help: "load older events", primary: true})
+		b = append(b, binding{keys: "m", short: m.say(i18n.KeyMore), help: m.say(i18n.KeyLoadOlder), primary: true})
 	}
 	return append(b,
-		binding{keys: "q, esc", short: "quit", help: "quit git-rewind", primary: true},
-		helpBinding,
+		binding{keys: "q, esc", short: m.say(i18n.KeyQuit), help: m.say(i18n.KeyQuitLong), primary: true},
+		m.helpBinding(),
 	)
 }
 
 func (m model) confirmBindings() []binding {
-	apply := binding{keys: "y", short: "apply", help: "apply this rescue", primary: true}
+	apply := binding{keys: "y", short: m.say(i18n.KeyApply), help: m.say(i18n.KeyApplyRescue), primary: true}
 	if m.discardsUncommitted() {
 		apply = binding{
 			keys:    "f",
-			short:   "apply, discarding changes",
-			help:    "apply and discard your uncommitted changes",
+			short:   m.say(i18n.KeyApplyDiscard),
+			help:    m.say(i18n.KeyApplyDiscardLong),
 			primary: true,
 		}
 	}
 	return []binding{
 		apply,
-		{keys: "esc", short: "back", help: "back to the rescue list", primary: true},
-		quitBinding,
-		helpBinding,
+		{keys: "esc", short: m.say(i18n.KeyBack), help: m.say(i18n.KeyBackRescues), primary: true},
+		m.quitBinding(),
+		m.helpBinding(),
 	}
 }
 
@@ -91,35 +101,35 @@ func (m model) helpView() string {
 
 	width := 0
 	for _, b := range bindings {
-		if len(b.keys) > width {
-			width = len(b.keys)
+		if n := utf8.RuneCountInString(b.keys); n > width {
+			width = n
 		}
 	}
 
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Keys — " + m.screen.String()))
+	b.WriteString(titleStyle.Render(m.say(i18n.TuiHelpTitle, m.screenName())))
 	b.WriteString("\n\n")
 	for _, k := range bindings {
-		fmt.Fprintf(&b, "  %s  %s\n", keyStyle.Render(fmt.Sprintf("%-*s", width, k.keys)), k.help)
+		padding := strings.Repeat(" ", width-utf8.RuneCountInString(k.keys))
+		fmt.Fprintf(&b, "  %s  %s\n", keyStyle.Render(k.keys+padding), k.help)
 	}
 
-	b.WriteString("\n" + labelStyle.Render("  Nothing runs until you confirm it, and your current state is always saved"))
-	b.WriteString("\n" + labelStyle.Render("  to a backup/rewind-<timestamp> branch first.") + "\n\n")
-	b.WriteString(helpStyle.Render("?, esc: close this help  |  q: quit"))
+	b.WriteString("\n" + labelStyle.Render(m.say(i18n.TuiHelpSafety)) + "\n\n")
+	b.WriteString(helpStyle.Render(m.say(i18n.TuiHelpFooter)))
 	return b.String()
 }
 
-func (s screen) String() string {
-	switch s {
+func (m model) screenName() string {
+	switch m.screen {
 	case screenDetail:
-		return "event detail"
+		return m.say(i18n.TuiScreenDetail)
 	case screenRescues:
-		return "available rescues"
+		return m.say(i18n.TuiScreenRescues)
 	case screenConfirm:
-		return "confirmation"
+		return m.say(i18n.TuiScreenConfirm)
 	case screenResult:
-		return "result"
+		return m.say(i18n.TuiScreenResult)
 	default:
-		return "timeline"
+		return m.say(i18n.TuiScreenTimeline)
 	}
 }

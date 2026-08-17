@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/neomikhe/git-rewind/core/gitexec"
+	"github.com/neomikhe/git-rewind/core/i18n"
 	"github.com/neomikhe/git-rewind/core/timeline"
 )
 
@@ -41,9 +42,9 @@ func (m model) timelineView() string {
 
 func (m model) timelineTitle() string {
 	if m.hasMore() {
-		return fmt.Sprintf("git-rewind timeline (%d events, more available)", len(m.session.Events))
+		return m.say(i18n.TuiTimelineTitleMore, len(m.session.Events))
 	}
-	return fmt.Sprintf("git-rewind timeline (%d events)", len(m.session.Events))
+	return m.say(i18n.TuiTimelineTitle, len(m.session.Events))
 }
 
 func (m model) renderRow(i int) string {
