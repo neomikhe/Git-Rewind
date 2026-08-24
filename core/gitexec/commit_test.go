@@ -45,40 +45,49 @@ func TestParseCommitRejectsMalformed(t *testing.T) {
 	}
 }
 
-func TestParseGrep(t *testing.T) {
-	hash := strings.Repeat("b", 40)
-	raw := hash + ":core/gitexec/reflog.go\x0016\x00\tunitSep = 1\n" +
-		hash + ":odd:path/with:colons.go\x007\x00found here\n" +
-		"someotherhash:ignored.go\x001\x00not ours\n"
+func TestParseGrepKeysMatchesByCommit(t *testing.T) {
+	a := strings.Repeat("b", 40)
+	b := strings.Repeat("c", 40)
+	raw := a + ":core/gitexec/reflog.go\x0016\x00\tunitSep = 1\n" +
+		a + ":odd:path/with:colons.go\x007\x00found here\n" +
+		b + ":other.go\x001\x00another commit\n"
 
-	got, err := parseGrep([]byte(raw), hash, 0)
-	if err != nil {
+	matches := make(map[string][]GrepMatch)
+	if err := parseGrep([]byte(raw), 0, matches); err != nil {
 		t.Fatalf("parseGrep: %v", err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("got %d matches, want 2: %+v", len(got), got)
+
+	if len(matches[a]) != 2 {
+		t.Fatalf("commit a has %d matches, want 2: %+v", len(matches[a]), matches[a])
 	}
-	if got[0].Path != "core/gitexec/reflog.go" || got[0].Line != 16 {
-		t.Errorf("first match = %+v", got[0])
+	if matches[a][0].Path != "core/gitexec/reflog.go" || matches[a][0].Line != 16 {
+		t.Errorf("first match = %+v", matches[a][0])
 	}
-	if got[1].Path != "odd:path/with:colons.go" || got[1].Line != 7 {
-		t.Errorf("a path containing colons was mis-parsed: %+v", got[1])
+	if matches[a][1].Path != "odd:path/with:colons.go" || matches[a][1].Line != 7 {
+		t.Errorf("a path containing colons was mis-parsed: %+v", matches[a][1])
+	}
+	if len(matches[b]) != 1 || matches[b][0].Path != "other.go" {
+		t.Errorf("a second commit in the same batch was lost: %+v", matches[b])
 	}
 }
 
-func TestParseGrepRespectsMax(t *testing.T) {
-	hash := strings.Repeat("c", 40)
+func TestParseGrepLimitsPerCommitNotOverall(t *testing.T) {
+	a := strings.Repeat("d", 40)
+	b := strings.Repeat("e", 40)
+
 	var raw strings.Builder
-	for i := 1; i <= 10; i++ {
-		raw.WriteString(hash + ":f.go\x001\x00line\n")
+	for i := 0; i < 10; i++ {
+		raw.WriteString(a + ":f.go\x001\x00line\n")
+		raw.WriteString(b + ":g.go\x001\x00line\n")
 	}
 
-	got, err := parseGrep([]byte(raw.String()), hash, 3)
-	if err != nil {
+	matches := make(map[string][]GrepMatch)
+	if err := parseGrep([]byte(raw.String()), 3, matches); err != nil {
 		t.Fatalf("parseGrep: %v", err)
 	}
-	if len(got) != 3 {
-		t.Errorf("got %d matches, want the cap of 3", len(got))
+	if len(matches[a]) != 3 || len(matches[b]) != 3 {
+		t.Errorf("got %d and %d matches, want the cap of 3 applied to each commit separately",
+			len(matches[a]), len(matches[b]))
 	}
 }
 

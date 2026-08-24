@@ -64,18 +64,24 @@ func Find(ctx context.Context, git *gitexec.Runner, query string, opts Options) 
 	}
 	result.Inspected = len(commits)
 
+	inFiles := make(map[string][]gitexec.GrepMatch)
+	if !opts.MessagesOnly {
+		hashes := make([]string, len(commits))
+		for i, commit := range commits {
+			hashes[i] = commit.Hash
+		}
+		if inFiles, err = git.GrepCommits(ctx, hashes, query, opts.MaxFileHits); err != nil {
+			return result, err
+		}
+	}
+
 	needle := strings.ToLower(query)
 	for _, commit := range commits {
-		match := Match{Commit: commit, InMessage: messageContains(commit, needle)}
-
-		if !opts.MessagesOnly {
-			hits, err := git.GrepCommit(ctx, commit.Hash, query, opts.MaxFileHits)
-			if err != nil {
-				return result, err
-			}
-			match.InFiles = hits
+		match := Match{
+			Commit:    commit,
+			InMessage: messageContains(commit, needle),
+			InFiles:   inFiles[commit.Hash],
 		}
-
 		if match.InMessage || len(match.InFiles) > 0 {
 			result.Matches = append(result.Matches, match)
 		}
@@ -93,9 +99,6 @@ func withDefaults(opts Options) Options {
 	return opts
 }
 
-// lostChains expands each dangling tip into the whole run of commits below it that no branch
-// or tag reaches. fsck only reports the tips, so searching those alone would miss every
-// commit under them — and report work as gone when it is perfectly recoverable.
 func lostChains(ctx context.Context, git *gitexec.Runner, tips map[string]struct{}) ([]string, error) {
 	ordered := make([]string, 0, len(tips))
 	for tip := range tips {
@@ -122,8 +125,6 @@ func lostChains(ctx context.Context, git *gitexec.Runner, tips map[string]struct
 }
 
 func describeOrphans(ctx context.Context, git *gitexec.Runner, candidates []string, limit int) ([]gitexec.Commit, error) {
-	// Bound the metadata reads before making them: each one is a git subprocess, and a long
-	// lost chain would otherwise cost hundreds of them only to be truncated afterwards.
 	if len(candidates) > limit {
 		candidates = candidates[:limit]
 	}
