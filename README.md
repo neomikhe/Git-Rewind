@@ -168,6 +168,15 @@ are published on the [Releases](https://github.com/neomikhe/git-rewind/releases)
 a `checksums.txt` (SHA-256) to verify them against. Homebrew, Scoop, AUR and winget packages
 are planned.
 
+Every archive also carries a build provenance attestation signed by GitHub, which proves it
+was built by this repository's release workflow from the tagged commit — something a
+checksum published next to the file cannot prove. With the
+[GitHub CLI](https://cli.github.com/):
+
+```bash
+gh attestation verify git-rewind_0.1.0_linux_amd64.tar.gz --repo neomikhe/git-rewind
+```
+
 **Requirements:** `git` 2.19 or newer on your `PATH` at runtime, and Go 1.26+ if you build
 from source.
 Linux, macOS and Windows are all supported and all tested in CI.
