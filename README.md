@@ -226,7 +226,11 @@ convention:
   branch away.
 - **Uncommitted changes are never touched silently.** A backup branch preserves commits, not
   your working tree — so any rescue that would overwrite uncommitted work is *refused* on a
-  dirty tree until you explicitly force it.
+  dirty tree until you explicitly force it. The check runs again at the moment you apply,
+  so changes made after the rescue was shown are caught too, and a rescue is refused if
+  `HEAD` moved in the meantime. One exception comes from Git itself: files your
+  `.gitignore` excludes count as disposable, so a `reset --hard` to a commit that tracks the
+  same path replaces them without either Git or git-rewind treating that as a change.
 - **Nothing here reimplements Git.** Every operation shells out to your own `git` binary
   using plumbing commands and stable `--format` output. There is no bespoke object-database
   code that could corrupt a repository.
@@ -392,7 +396,11 @@ Con el binario en el `PATH`, Git lo invoca como subcomando nativo: `git rewind`.
   estado actual en `backup/rewind-<timestamp>`. No existe ninguna opción que se salte ese
   backup.
 - **Nunca se tocan los cambios sin commitear en silencio.** Un rescate que sobrescribiría el
-  working tree se rechaza si hay cambios pendientes, salvo que lo fuerces explícitamente.
+  working tree se rechaza si hay cambios pendientes, salvo que lo fuerces explícitamente. La
+  comprobación se repite justo al aplicar, y el rescate se rechaza si `HEAD` se movió
+  entretanto. La única excepción viene del propio Git: los archivos que excluye tu
+  `.gitignore` se consideran desechables, así que un `reset --hard` a un commit que versiona
+  esa misma ruta los reemplaza.
 - **No se reimplementa Git.** Todo se delega en tu propio binario `git`.
 
 Respaldándolo: **8 rescates y 7 repositorios rotos reproducibles**, con tests de integración
