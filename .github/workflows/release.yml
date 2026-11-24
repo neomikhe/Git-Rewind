@@ -9,24 +9,65 @@ permissions:
   contents: read
 
 jobs:
+  # Everything that runs project or third-party code happens here, without write access.
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Tag points at a commit on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: false
+
+      - name: Modules are tidy
+        run: go mod tidy -diff
+
+      - name: Test
+        run: go test ./...
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
+          for goos in linux darwin windows; do
+            echo "govulncheck GOOS=$goos"
+            GOOS="$goos" "$(go env GOPATH)/bin/govulncheck" ./...
+          done
+
+  # The only job holding a write token: it builds and publishes, and runs nothing else.
   goreleaser:
     name: goreleaser
+    needs: verify
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       # GoReleaser needs the full history and all tags to build the changelog.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
-      - uses: actions/setup-go@v6
+      # No build cache on the release path, so nothing another run cached can reach a published binary.
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
+          check-latest: true
+          cache: false
 
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
-          version: "~> v2"
+          version: v2.20.3
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

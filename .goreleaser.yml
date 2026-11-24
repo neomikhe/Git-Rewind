@@ -2,11 +2,6 @@ version: 2
 
 project_name: git-rewind
 
-before:
-  hooks:
-    - go mod tidy
-    - go test ./...
-
 builds:
   - id: git-rewind
     main: ./cmd/git-rewind
