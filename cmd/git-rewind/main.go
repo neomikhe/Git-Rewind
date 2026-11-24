@@ -168,8 +168,6 @@ func describePlan(p *i18n.Printer, recipe recipes.Recipe, plan *safety.Plan, dir
 	return b.String()
 }
 
-// describeApplyFailure keeps the backup branch in front of the user when a rescue dies
-// partway through. That is the one moment they most need to know their work is safe.
 func describeApplyFailure(p *i18n.Printer, err error) error {
 	var applyErr *safety.ApplyError
 	if !errors.As(err, &applyErr) {

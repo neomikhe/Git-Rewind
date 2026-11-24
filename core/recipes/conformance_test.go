@@ -13,9 +13,6 @@ import (
 
 var kebabCase = regexp.MustCompile(`^[a-z][a-z0-9]*(-[a-z0-9]+)*$`)
 
-// worktreeDestroying lists the git operations that overwrite tracked files. A plan
-// containing one of these must declare DiscardsChanges, or the dirty-tree guard in both
-// front ends silently stops protecting the user's uncommitted work.
 var worktreeDestroying = []struct {
 	command string
 	flags   []string
@@ -45,10 +42,6 @@ func TestEveryRecipeTitleDiffersFromItsName(t *testing.T) {
 	}
 }
 
-// TestEveryPlanHonoursTheSafetyContract runs every recipe against every fixture and checks
-// the invariants each returned plan must satisfy. It is the guard that lets a contributed
-// recipe be trusted: a plan that discards the working tree without saying so, or that runs a
-// command with no explanation, fails here rather than in someone's repository.
 func TestEveryPlanHonoursTheSafetyContract(t *testing.T) {
 	checked := 0
 	for _, s := range scenario.All() {

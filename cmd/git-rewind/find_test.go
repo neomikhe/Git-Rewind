@@ -94,9 +94,6 @@ func TestClipKeepsOutputReadable(t *testing.T) {
 	}
 }
 
-// TestClipNeverSplitsARune guards against slicing a matched line by byte. find greps whatever
-// is in the user's files, so a line of CJK, accented or emoji text would otherwise be cut
-// mid-character and printed as invalid UTF-8.
 func TestClipNeverSplitsARune(t *testing.T) {
 	for _, char := range []string{"á", "€", "漢", "🙂", "x"} {
 		line := strings.Repeat(char, maxMatchLineLen+40)

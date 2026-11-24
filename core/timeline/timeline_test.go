@@ -101,8 +101,6 @@ func TestFromReflogPreservesOrderAndData(t *testing.T) {
 	}
 }
 
-// TestKindAndRiskNamesAreStable guards the strings that reach --json consumers: they are
-// enum values, not prose, so a rename is a breaking change rather than a wording tweak.
 func TestKindAndRiskNamesAreStable(t *testing.T) {
 	kinds := map[Kind]string{
 		KindOther:         "other",

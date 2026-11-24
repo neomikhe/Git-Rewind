@@ -118,8 +118,6 @@ func matchHeading(m search.Match) string {
 		m.Commit.Subject)
 }
 
-// clip shortens a matched line by runes, not bytes: a matched file can contain any UTF-8,
-// and slicing it by byte would cut a character in half and emit invalid output.
 func clip(s string) string {
 	if utf8.RuneCountInString(s) <= maxMatchLineLen {
 		return s

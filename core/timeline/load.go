@@ -6,8 +6,7 @@ import (
 	"github.com/neomikhe/git-rewind/core/gitexec"
 )
 
-// Load returns fully classified events for at most limit reflog entries, or all of them
-// when limit is not positive.
+// Load returns classified events for up to limit reflog entries; a non-positive limit loads all.
 func Load(ctx context.Context, git *gitexec.Runner, limit int) ([]Event, error) {
 	entries, err := git.Reflog(ctx, limit)
 	if err != nil {

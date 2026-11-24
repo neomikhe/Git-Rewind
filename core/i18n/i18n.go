@@ -54,8 +54,7 @@ func (p *Printer) T(key Key, args ...any) string {
 	return fmt.Sprintf(format, args...)
 }
 
-// Resolve picks a language from the override, then the configured value, then the locale
-// environment, falling back to English.
+// Resolve picks the override, then GIT_REWIND_LANG, then the configured value, then the locale, else English.
 func Resolve(override, configured string, env func(string) string) Lang {
 	for _, candidate := range []string{override, env(EnvVar), configured} {
 		if lang, ok := parse(candidate); ok {

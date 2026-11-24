@@ -61,9 +61,6 @@ func TestLoadFromRejectsMalformedJSON(t *testing.T) {
 	}
 }
 
-// TestLoadAndSaveUseTheUserConfigDir exercises the entry points the CLI actually calls, by
-// pointing the OS configuration directory at a temporary one. os.UserConfigDir reads AppData
-// on Windows and XDG_CONFIG_HOME/HOME elsewhere, so all three are set.
 func TestLoadAndSaveUseTheUserConfigDir(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("AppData", dir)
