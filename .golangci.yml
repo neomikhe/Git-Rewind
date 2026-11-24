@@ -12,6 +12,8 @@ linters:
     - unconvert
     - unparam
     - bodyclose
+    - bidichk
+    - asciicheck
   exclusions:
     rules:
       # Recipe implementations: the interface documents Name/Title/Detect once, and each

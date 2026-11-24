@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -171,5 +172,43 @@ func writeFile(t *testing.T, dir, content string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, workFile), []byte(content), 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestReflogHashesReturnsEveryCommitHeadVisited(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH")
+	}
+	dir := t.TempDir()
+	base := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	initRepo(t, dir)
+	r := New(dir)
+	ctx := context.Background()
+
+	empty, err := r.ReflogHashes(ctx)
+	if err != nil || len(empty) != 0 {
+		t.Fatalf("ReflogHashes on an unborn repo = %v, %v; want none and no error", empty, err)
+	}
+
+	var commits []string
+	for i, content := range []string{"one\n", "one\ntwo\n", "one\ntwo\nthree\n"} {
+		writeFile(t, dir, content)
+		runGit(t, dir, base.Add(time.Duration(i)*time.Minute), "add", workFile)
+		runGit(t, dir, base.Add(time.Duration(i)*time.Minute), "commit", "-m", "commit")
+		head, err := r.Run(ctx, "rev-parse", "HEAD")
+		if err != nil {
+			t.Fatal(err)
+		}
+		commits = append(commits, strings.TrimSpace(head))
+	}
+
+	visited, err := r.ReflogHashes(ctx)
+	if err != nil {
+		t.Fatalf("ReflogHashes: %v", err)
+	}
+	for _, c := range commits {
+		if !visited[c] {
+			t.Errorf("ReflogHashes is missing %s", c)
+		}
 	}
 }

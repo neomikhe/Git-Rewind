@@ -13,23 +13,11 @@ import (
 )
 
 const (
-	unitSep        = "\x1f"
-	reflogFormat   = "%gd" + unitSep + "%H" + unitSep + "%gn" + unitSep + "%ge" + unitSep + "%gs"
-	reflogFields   = 5
-	defaultTimeout = 10 * time.Second
-	maxLineBytes   = 1024 * 1024
+	unitSep      = "\x1f"
+	reflogFormat = "%gd" + unitSep + "%H" + unitSep + "%gn" + unitSep + "%ge" + unitSep + "%gs"
+	reflogFields = 5
+	maxLineBytes = 1024 * 1024
 )
-
-// Runner executes git plumbing commands inside one repository.
-type Runner struct {
-	dir     string
-	timeout time.Duration
-}
-
-// New returns a Runner that runs git in dir, a repository root or any path inside it.
-func New(dir string) *Runner {
-	return &Runner{dir: dir, timeout: defaultTimeout}
-}
 
 // ReflogEntry is a single parsed entry from a repository's reflog.
 type ReflogEntry struct {
@@ -66,10 +54,29 @@ func (r *Runner) Reflog(ctx context.Context, limit int) ([]ReflogEntry, error) {
 	return parseReflog(out)
 }
 
-// Run executes an arbitrary git command in the repository and returns its standard output.
-func (r *Runner) Run(ctx context.Context, args ...string) (string, error) {
-	out, err := r.run(ctx, args...)
-	return string(out), err
+// ReflogHashes returns every commit HEAD's reflog records, however far back, as a set.
+func (r *Runner) ReflogHashes(ctx context.Context) (map[string]bool, error) {
+	hashes := make(map[string]bool)
+	born, err := r.hasCommits(ctx)
+	if err != nil || !born {
+		return hashes, err
+	}
+
+	out, err := r.run(ctx, "reflog", "show", "--no-show-signature", "--format=%H", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		hash := strings.TrimSpace(line)
+		if hash == "" {
+			continue
+		}
+		if !isFullHash(hash) {
+			return nil, fmt.Errorf("reflog returned %q, not a commit hash", hash)
+		}
+		hashes[hash] = true
+	}
+	return hashes, nil
 }
 
 func (r *Runner) hasCommits(ctx context.Context) (bool, error) {
@@ -83,23 +90,6 @@ func (r *Runner) hasCommits(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 	return false, err
-}
-
-func (r *Runner) run(ctx context.Context, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, r.timeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "git", args...) //nolint:gosec // G204: fixed "git" command, non-shell args controlled by this package.
-	cmd.Dir = r.dir
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
-	}
-	return stdout.Bytes(), nil
 }
 
 func parseReflog(out []byte) ([]ReflogEntry, error) {

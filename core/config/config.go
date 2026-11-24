@@ -47,15 +47,15 @@ func LoadFrom(path string) (Config, error) {
 		return Config{}, nil
 	}
 	if err != nil {
-		return Config{}, fmt.Errorf("reading %s: %w", path, err)
+		return Config{}, fmt.Errorf("reading the configuration file: %w", pathless(err))
 	}
 	if len(raw) > maxFileSize {
-		return Config{}, fmt.Errorf("reading %s: file is larger than %d bytes", path, maxFileSize)
+		return Config{}, fmt.Errorf("reading the configuration file: it is larger than %d bytes", maxFileSize)
 	}
 
 	var c Config
 	if err := json.Unmarshal(raw, &c); err != nil {
-		return Config{}, fmt.Errorf("parsing %s: %w", path, err)
+		return Config{}, fmt.Errorf("parsing the configuration file: %w", err)
 	}
 	return c, nil
 }
@@ -72,7 +72,7 @@ func Save(c Config) error {
 // SaveTo writes a configuration file to path, creating its directory when needed.
 func SaveTo(path string, c Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), dirPerm); err != nil {
-		return fmt.Errorf("creating %s: %w", filepath.Dir(path), err)
+		return fmt.Errorf("creating the configuration directory: %w", pathless(err))
 	}
 
 	raw, err := json.MarshalIndent(c, "", "  ")
@@ -80,7 +80,15 @@ func SaveTo(path string, c Config) error {
 		return fmt.Errorf("encoding the configuration: %w", err)
 	}
 	if err := os.WriteFile(path, append(raw, '\n'), filePerm); err != nil {
-		return fmt.Errorf("writing %s: %w", path, err)
+		return fmt.Errorf("writing the configuration file: %w", pathless(err))
 	}
 	return nil
+}
+
+func pathless(err error) error {
+	var pathErr *fs.PathError
+	if errors.As(err, &pathErr) {
+		return pathErr.Err
+	}
+	return err
 }

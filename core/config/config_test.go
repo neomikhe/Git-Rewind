@@ -105,6 +105,39 @@ func TestLoadFromRejectsAnOversizedFile(t *testing.T) {
 	}
 }
 
+func TestErrorsDoNotRevealTheConfigPath(t *testing.T) {
+	dir := t.TempDir()
+	malformed := filepath.Join(dir, "malformed.json")
+	oversized := filepath.Join(dir, "oversized.json")
+	directory := filepath.Join(dir, "a-directory")
+	if err := os.WriteFile(malformed, []byte("{not json"), filePerm); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(oversized, make([]byte, maxFileSize+1), filePerm); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(directory, dirPerm); err != nil {
+		t.Fatal(err)
+	}
+	blocked := filepath.Join(malformed, "nested", "config.json")
+
+	errs := map[string]error{}
+	for name, path := range map[string]string{"malformed": malformed, "oversized": oversized, "directory": directory} {
+		_, errs[name] = LoadFrom(path)
+	}
+	errs["unwritable"] = SaveTo(blocked, Config{Language: "es"})
+
+	for name, err := range errs {
+		if err == nil {
+			t.Errorf("%s: expected an error", name)
+			continue
+		}
+		if strings.Contains(err.Error(), dir) || strings.Contains(err.Error(), filepath.ToSlash(dir)) {
+			t.Errorf("%s: error reveals the local path: %v", name, err)
+		}
+	}
+}
+
 func TestPathIsInsideTheUserConfigDir(t *testing.T) {
 	got, err := Path()
 	if err != nil {
