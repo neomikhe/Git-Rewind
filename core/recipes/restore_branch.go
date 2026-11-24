@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/neomikhe/git-rewind/core/gitexec"
 	"github.com/neomikhe/git-rewind/core/i18n"
 	"github.com/neomikhe/git-rewind/core/safety"
 	"github.com/neomikhe/git-rewind/core/timeline"
@@ -24,7 +25,7 @@ func (RestoreDeletedBranch) Detect(ctx context.Context, repo *Repo) (*safety.Pla
 			continue
 		}
 		from, ok := parseCheckoutFrom(e.Entry.Subject)
-		if !ok || from == "" || strings.HasPrefix(from, "-") || looksLikeHash(from) {
+		if !ok || !isSafeBranchName(from) || looksLikeHash(from) {
 			continue
 		}
 		if refExists(ctx, repo.Git, "refs/heads/"+from) {
@@ -45,4 +46,8 @@ func (RestoreDeletedBranch) Detect(ctx context.Context, repo *Repo) (*safety.Pla
 		}, nil
 	}
 	return nil, nil
+}
+
+func isSafeBranchName(name string) bool {
+	return name != "" && !strings.HasPrefix(name, "-") && gitexec.Printable(name) == name
 }
