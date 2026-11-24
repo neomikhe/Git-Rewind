@@ -176,7 +176,7 @@ checksum published next to the file cannot prove. With the
 [GitHub CLI](https://cli.github.com/):
 
 ```bash
-gh attestation verify git-rewind_0.1.0_linux_amd64.tar.gz --repo neomikhe/git-rewind
+gh attestation verify git-rewind_0.1.0_linux_amd64.tar.gz --repo neomikhe/Git-Rewind
 ```
 
 **Requirements:** `git` 2.19 or newer on your `PATH` at runtime, and Go 1.26+ if you build
