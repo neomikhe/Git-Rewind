@@ -179,20 +179,7 @@ func TestFromReflogOnRealResetHard(t *testing.T) {
 		t.Skip("git not found in PATH")
 	}
 
-	var resetHard scenario.Scenario
-	for _, s := range scenario.All() {
-		if s.Name == "reset-hard" {
-			resetHard = s
-		}
-	}
-	if resetHard.Build == nil {
-		t.Fatal("reset-hard scenario not found in registry")
-	}
-
-	built, err := resetHard.Build(t.TempDir())
-	if err != nil {
-		t.Fatalf("build reset-hard: %v", err)
-	}
+	built := buildScenario(t, "reset-hard")
 
 	runner := gitexec.New(built.Dir)
 	entries, err := runner.Reflog(context.Background(), 0)
@@ -220,5 +207,69 @@ func TestFromReflogOnRealResetHard(t *testing.T) {
 	lost := built.Anchors["lost"]
 	if got := events[0].Orphaned; len(got) != 1 || got[0] != lost {
 		t.Errorf("reset event Orphaned = %v, want [%s]", got, lost)
+	}
+}
+
+func TestLoadWithHeadReturnsTheHeadTheEventsWereReadAgainst(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH")
+	}
+	git := gitexec.New(buildScenario(t, "reset-hard").Dir)
+
+	head, events, err := LoadWithHead(context.Background(), git, 0)
+	if err != nil {
+		t.Fatalf("LoadWithHead: %v", err)
+	}
+	if len(events) == 0 || head.Hash != events[0].Entry.Hash || head.Branch != "main" {
+		t.Errorf("head = %+v with %d events, want main at the newest event's commit", head, len(events))
+	}
+}
+
+func TestLoadWithHeadOnAnEmptyRepository(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH")
+	}
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", dir).CombinedOutput(); err != nil { //nolint:gosec // G204: fixed "git" command with a test-created directory.
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+
+	head, events, err := LoadWithHead(context.Background(), gitexec.New(dir), 0)
+	if err != nil || len(events) != 0 || head != (gitexec.Head{}) {
+		t.Errorf("LoadWithHead on an empty repo = %+v, %d events, %v; want nothing and no error", head, len(events), err)
+	}
+}
+
+func buildScenario(t *testing.T, name string) scenario.Built {
+	t.Helper()
+	for _, s := range scenario.All() {
+		if s.Name != name {
+			continue
+		}
+		built, err := s.Build(t.TempDir())
+		if err != nil {
+			t.Fatalf("build %s: %v", name, err)
+		}
+		return built
+	}
+	t.Fatalf("scenario %q not found in registry", name)
+	return scenario.Built{}
+}
+
+func TestLoadWithHeadKeepsTheHeadWhenTheReflogIsEmpty(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH")
+	}
+	git := gitexec.New(buildScenario(t, "reset-hard").Dir)
+	if _, err := git.Mutate(context.Background(), "reflog", "expire", "--expire=now", "--all"); err != nil {
+		t.Fatal(err)
+	}
+
+	head, events, err := LoadWithHead(context.Background(), git, 0)
+	if err != nil {
+		t.Fatalf("LoadWithHead: %v", err)
+	}
+	if len(events) != 0 || head.Hash == "" || head.Branch != "main" {
+		t.Errorf("head = %+v with %d events, want main's commit even with no reflog", head, len(events))
 	}
 }

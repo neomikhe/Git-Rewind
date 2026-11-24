@@ -27,6 +27,7 @@ var spanish = map[Key]string{
 	LastDirtyWarning:     "\n  ! Tienes cambios sin commitear. NO se guardan en la copia de seguridad y se perderían.\n",
 	LastDryRun:           "\nSimulación. Vuelve a ejecutarlo con --yes para aplicarlo; siempre se crea antes una rama de copia de seguridad.\n",
 	LastAbortedDirty:     "cancelado: se descartarían cambios sin commitear; haz commit o stash, o vuelve a ejecutarlo con --force",
+	LastAbortedHeadMoved: "cancelado: HEAD se movió mientras se calculaba el rescate, así que podría apuntar a la rama equivocada; no se cambió nada, vuelve a ejecutarlo",
 	LastDone:             "\nHecho. El estado anterior queda guardado en la rama %s.\n",
 	LastFailedWithBackup: "el rescate falló al ejecutar %q: %v — no se ejecutó nada más, y tu estado anterior queda guardado en la rama %s",
 
@@ -115,6 +116,7 @@ var spanish = map[Key]string{
 	TuiWorking:            "Trabajando...\n",
 	TuiError:              "Error: %s",
 	TuiErrDirtyTree:       "se descartarían cambios sin commitear; pulsa f para aplicarlo igualmente, o sal y haz commit o stash antes",
+	TuiErrHeadMoved:       "HEAD se movió desde que se leyó este historial, así que el rescate podría apuntar a la rama equivocada; no se cambió nada — sal y vuelve a ejecutar git rewind",
 	TuiErrApplyFailed:     "%q falló: %v — tu estado anterior queda guardado en la rama %s",
 	TuiHelpTitle:          "Teclas — %s",
 	TuiHelpSafety:         "  No se ejecuta nada hasta que lo confirmas, y tu estado actual siempre se guarda\n  antes en una rama backup/rewind-<marca de tiempo>.",

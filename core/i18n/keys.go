@@ -31,6 +31,7 @@ const (
 	LastDirtyWarning
 	LastDryRun
 	LastAbortedDirty
+	LastAbortedHeadMoved
 	LastDone
 	LastFailedWithBackup
 
@@ -118,6 +119,7 @@ const (
 	TuiWorking
 	TuiError
 	TuiErrDirtyTree
+	TuiErrHeadMoved
 	TuiErrApplyFailed
 	TuiHelpTitle
 	TuiHelpSafety

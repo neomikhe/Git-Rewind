@@ -411,7 +411,7 @@ func TestRescueBacksUpPreRescueState(t *testing.T) {
 	if plan == nil {
 		t.Fatal("recipe did not apply to its scenario")
 	}
-	res, err := safety.Apply(context.Background(), repo.Git, *plan, safety.Options{Execute: true, Now: fixedNow})
+	res, err := safety.Apply(context.Background(), repo.Git, *plan, safety.Options{Execute: true, Expected: headOf(t, repo), Now: fixedNow})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -432,7 +432,7 @@ func runRecipe(t *testing.T, repo *Repo, r Recipe) {
 	if plan == nil {
 		t.Fatalf("%s did not apply to its scenario", r.Name())
 	}
-	res, err := safety.Apply(context.Background(), repo.Git, *plan, safety.Options{Execute: true, Now: fixedNow})
+	res, err := safety.Apply(context.Background(), repo.Git, *plan, safety.Options{Execute: true, Expected: headOf(t, repo), Now: fixedNow})
 	if err != nil {
 		t.Fatalf("%s Apply: %v", r.Name(), err)
 	}
@@ -542,4 +542,13 @@ func writeFile(t *testing.T, dir, content string) {
 	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func headOf(t *testing.T, repo *Repo) gitexec.Head {
+	t.Helper()
+	head, err := repo.Git.HeadState(context.Background())
+	if err != nil {
+		t.Fatalf("HeadState: %v", err)
+	}
+	return head
 }

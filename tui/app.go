@@ -28,11 +28,10 @@ var (
 	warnStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true)
 )
 
-var errDirtyTree = errors.New("dirty working tree")
-
 // Session is the repository state the TUI works on.
 type Session struct {
 	Git     *gitexec.Runner
+	Head    gitexec.Head
 	Events  []timeline.Event
 	Limit   int
 	Printer *i18n.Printer
@@ -71,6 +70,7 @@ type appliedMsg struct {
 }
 
 type eventsMsg struct {
+	head   gitexec.Head
 	events []timeline.Event
 	limit  int
 	err    error
@@ -119,7 +119,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.err = msg.err
 		if msg.err == nil {
-			m.session.Events, m.session.Limit = msg.events, msg.limit
+			m.session.Head, m.session.Events, m.session.Limit = msg.head, msg.events, msg.limit
 		}
 	case rescuesMsg:
 		m.loading = false
@@ -131,6 +131,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case appliedMsg:
 		m.loading = false
 		m.err = msg.err
+		if errors.Is(msg.err, safety.ErrDirtyTree) {
+			m.dirty = true
+		}
 		if msg.err == nil {
 			m.applied = &msg.result
 			m.screen = screenResult
@@ -247,26 +250,26 @@ func (m model) onConfirmKey(key string) (tea.Model, tea.Cmd) {
 		m.screen = screenRescues
 	case "y":
 		if m.discardsUncommitted() {
-			m.err = errDirtyTree
+			m.err = safety.ErrDirtyTree
 			return m, nil
 		}
 		m.loading = true
-		return m, applyCmd(m.session, *selected.plan)
+		return m, applyCmd(m.session, *selected.plan, false)
 	case "f":
 		if !m.discardsUncommitted() {
 			return m, nil
 		}
 		m.err = nil
 		m.loading = true
-		return m, applyCmd(m.session, *selected.plan)
+		return m, applyCmd(m.session, *selected.plan, true)
 	}
 	return m, nil
 }
 
 func loadMoreCmd(s Session, limit int) tea.Cmd {
 	return func() tea.Msg {
-		events, err := timeline.Load(context.Background(), s.Git, limit)
-		return eventsMsg{events: events, limit: limit, err: err}
+		head, events, err := timeline.LoadWithHead(context.Background(), s.Git, limit)
+		return eventsMsg{head: head, events: events, limit: limit, err: err}
 	}
 }
 
@@ -294,9 +297,14 @@ func detectCmd(s Session) tea.Cmd {
 	}
 }
 
-func applyCmd(s Session, plan safety.Plan) tea.Cmd {
+func applyCmd(s Session, plan safety.Plan, allowDiscard bool) tea.Cmd {
 	return func() tea.Msg {
-		res, err := safety.Apply(context.Background(), s.Git, plan, safety.Options{Execute: true, Now: time.Now()})
+		res, err := safety.Apply(context.Background(), s.Git, plan, safety.Options{
+			Execute:      true,
+			AllowDiscard: allowDiscard,
+			Expected:     s.Head,
+			Now:          time.Now(),
+		})
 		return appliedMsg{result: res, err: err}
 	}
 }
@@ -333,8 +341,11 @@ func (m model) footer() string {
 }
 
 func (m model) errorText() string {
-	if errors.Is(m.err, errDirtyTree) {
+	switch {
+	case errors.Is(m.err, safety.ErrDirtyTree):
 		return m.say(i18n.TuiErrDirtyTree)
+	case errors.Is(m.err, safety.ErrHeadMoved):
+		return m.say(i18n.TuiErrHeadMoved)
 	}
 	var applyErr *safety.ApplyError
 	if errors.As(m.err, &applyErr) {

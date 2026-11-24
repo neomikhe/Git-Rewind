@@ -3,7 +3,9 @@ package tui
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -172,8 +174,8 @@ func TestConfirmRequiresForceWhenTreeIsDirty(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("y must not apply a plan that would discard uncommitted changes")
 	}
-	if !errors.Is(refused.(model).err, errDirtyTree) {
-		t.Errorf("err = %v, want errDirtyTree", refused.(model).err)
+	if !errors.Is(refused.(model).err, safety.ErrDirtyTree) {
+		t.Errorf("err = %v, want safety.ErrDirtyTree", refused.(model).err)
 	}
 
 	forced, cmd := m.Update(key("f"))
@@ -386,11 +388,11 @@ func TestDetectAndApplyOnBrokenRepo(t *testing.T) {
 
 	built := buildScenario(t, "reset-hard")
 	git := gitexec.New(built.Dir)
-	events, err := timeline.Load(context.Background(), git, 0)
+	head, events, err := timeline.LoadWithHead(context.Background(), git, 0)
 	if err != nil {
-		t.Fatalf("timeline.Load: %v", err)
+		t.Fatalf("timeline.LoadWithHead: %v", err)
 	}
-	session := Session{Git: git, Events: events}
+	session := Session{Git: git, Head: head, Events: events}
 
 	detected, ok := detectCmd(session)().(rescuesMsg)
 	if !ok {
@@ -409,7 +411,7 @@ func TestDetectAndApplyOnBrokenRepo(t *testing.T) {
 		t.Error("the freshly built scenario should have a clean working tree")
 	}
 
-	applied, ok := applyCmd(session, *detected.rescues[0].plan)().(appliedMsg)
+	applied, ok := applyCmd(session, *detected.rescues[0].plan, false)().(appliedMsg)
 	if !ok {
 		t.Fatal("applyCmd did not return an appliedMsg")
 	}
@@ -450,4 +452,124 @@ func revParse(t *testing.T, git *gitexec.Runner, ref string) string {
 		t.Fatalf("rev-parse %s: %v", ref, err)
 	}
 	return strings.TrimSpace(out)
+}
+
+func TestATreeThatTurnsDirtyBeforeYesEnablesForce(t *testing.T) {
+	m := atRescues(t, []rescue{discardingRescue()}, false)
+	m = update(m, key("enter"))
+	m = update(m, appliedMsg{err: safety.ErrDirtyTree})
+
+	if !m.dirty {
+		t.Fatal("a refusal for a dirty tree must mark the tree dirty")
+	}
+	if !strings.Contains(m.View(), "press f to apply anyway") {
+		t.Errorf("the refusal is not explained\n---\n%s", m.View())
+	}
+	if _, cmd := m.Update(key("f")); cmd == nil {
+		t.Error("f must become available once the tree is known to be dirty")
+	}
+}
+
+func TestAMovedHeadIsExplained(t *testing.T) {
+	m := atRescues(t, []rescue{safeRescue()}, false)
+	m = update(m, key("enter"))
+	m = update(m, appliedMsg{err: safety.ErrHeadMoved})
+
+	if !strings.Contains(m.View(), "HEAD moved since this history was read") {
+		t.Errorf("a moved HEAD is not explained\n---\n%s", m.View())
+	}
+}
+
+func TestApplyRefusesWhenHeadMovedWhileTheTUIWasOpen(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH")
+	}
+	built := buildScenario(t, "reset-hard")
+	git := gitexec.New(built.Dir)
+	head, events, err := timeline.LoadWithHead(context.Background(), git, 0)
+	if err != nil {
+		t.Fatalf("timeline.LoadWithHead: %v", err)
+	}
+	session := Session{Git: git, Head: head, Events: events}
+	detected := detectCmd(session)().(rescuesMsg)
+	if detected.err != nil || len(detected.rescues) == 0 {
+		t.Fatalf("detect: %v, %d rescues", detected.err, len(detected.rescues))
+	}
+
+	if _, err := git.Mutate(context.Background(), "checkout", "-q", "-b", "switched-in-another-terminal"); err != nil {
+		t.Fatal(err)
+	}
+	applied := applyCmd(session, *detected.rescues[0].plan, false)().(appliedMsg)
+	if !errors.Is(applied.err, safety.ErrHeadMoved) {
+		t.Fatalf("apply after a branch switch = %v, want safety.ErrHeadMoved", applied.err)
+	}
+	if now := revParse(t, git, "HEAD"); now != head.Hash {
+		t.Errorf("HEAD moved to %s; a refused rescue must change nothing", now)
+	}
+	assertNoBackupBranch(t, git)
+}
+
+func TestYesNeverDiscardsAndForceDoesOnARealRepository(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH")
+	}
+	built := buildScenario(t, "reset-hard")
+	git := gitexec.New(built.Dir)
+	head, events, err := timeline.LoadWithHead(context.Background(), git, 0)
+	if err != nil {
+		t.Fatalf("timeline.LoadWithHead: %v", err)
+	}
+
+	m := update(newModel(Session{Git: git, Head: head, Events: events}), key("enter"))
+	next, detect := m.Update(key("enter"))
+	m = update(next.(model), detect())
+	m = update(m, key("enter"))
+	if m.screen != screenConfirm || !m.rescues[m.choice].plan.DiscardsChanges || m.dirty {
+		t.Fatalf("setup: want the confirm screen for a discarding plan on a clean tree, got screen %v", m.screen)
+	}
+
+	dirtyTrackedFile(t, git, built.Dir)
+
+	_, yes := m.Update(key("y"))
+	refused := yes()
+	if applied, ok := refused.(appliedMsg); !ok || !errors.Is(applied.err, safety.ErrDirtyTree) {
+		t.Fatalf("y on a tree dirtied after detection = %+v, want safety.ErrDirtyTree", refused)
+	}
+	assertNoBackupBranch(t, git)
+
+	m = update(m, refused)
+	_, force := m.Update(key("f"))
+	if force == nil {
+		t.Fatal("f must be available once the tree is known to be dirty")
+	}
+	forced, ok := force().(appliedMsg)
+	if !ok || forced.err != nil || forced.result.BackupBranch == "" {
+		t.Fatalf("f = %+v, want an applied rescue with a backup branch", forced)
+	}
+	if now := revParse(t, git, "HEAD"); now != built.Anchors["lost"] {
+		t.Errorf("HEAD = %s after f, want the recovered commit %s", now, built.Anchors["lost"])
+	}
+}
+
+func dirtyTrackedFile(t *testing.T, git *gitexec.Runner, dir string) {
+	t.Helper()
+	files, err := git.Run(context.Background(), "ls-files")
+	if err != nil {
+		t.Fatalf("ls-files: %v", err)
+	}
+	first, _, _ := strings.Cut(strings.TrimSpace(files), "\n")
+	if err := os.WriteFile(filepath.Join(dir, first), []byte("edited after the rescue was shown\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertNoBackupBranch(t *testing.T, git *gitexec.Runner) {
+	t.Helper()
+	branches, err := git.Run(context.Background(), "branch", "--list", "backup/*")
+	if err != nil {
+		t.Fatalf("listing backup branches: %v", err)
+	}
+	if strings.TrimSpace(branches) != "" {
+		t.Errorf("a refused rescue created a backup branch: %q", branches)
+	}
 }

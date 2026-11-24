@@ -60,14 +60,14 @@ func run(args []string, dir string, stdout io.Writer) error {
 	}
 
 	git := gitexec.New(dir)
-	events, err := timeline.Load(context.Background(), git, tui.PageSize)
+	head, events, err := timeline.LoadWithHead(context.Background(), git, tui.PageSize)
 	if err != nil {
 		return err
 	}
 	if len(events) == 0 {
 		return flush(stdout, p.T(i18n.RootNoHistory))
 	}
-	return tui.Run(tui.Session{Git: git, Events: events, Limit: tui.PageSize, Printer: p})
+	return tui.Run(tui.Session{Git: git, Head: head, Events: events, Limit: tui.PageSize, Printer: p})
 }
 
 func newPrinter() *i18n.Printer {
@@ -90,7 +90,7 @@ func runLast(args []string, dir string, stdout io.Writer, p *i18n.Printer) error
 
 	ctx := context.Background()
 	git := gitexec.New(dir)
-	events, err := timeline.Load(ctx, git, allEvents)
+	head, events, err := timeline.LoadWithHead(ctx, git, allEvents)
 	if err != nil {
 		return err
 	}
@@ -125,11 +125,13 @@ func runLast(args []string, dir string, stdout io.Writer, p *i18n.Printer) error
 		}
 		return flush(stdout, p.T(i18n.LastDryRun))
 	}
-	if dirtyRisk && !*force {
-		return errors.New(p.T(i18n.LastAbortedDirty))
-	}
 
-	res, err := safety.Apply(ctx, git, *plan, safety.Options{Execute: true, Now: time.Now()})
+	res, err := safety.Apply(ctx, git, *plan, safety.Options{
+		Execute:      true,
+		AllowDiscard: *force,
+		Expected:     head,
+		Now:          time.Now(),
+	})
 	if err != nil {
 		return describeApplyFailure(p, err)
 	}
@@ -169,6 +171,12 @@ func describePlan(p *i18n.Printer, recipe recipes.Recipe, plan *safety.Plan, dir
 }
 
 func describeApplyFailure(p *i18n.Printer, err error) error {
+	switch {
+	case errors.Is(err, safety.ErrDirtyTree):
+		return errors.New(p.T(i18n.LastAbortedDirty))
+	case errors.Is(err, safety.ErrHeadMoved):
+		return errors.New(p.T(i18n.LastAbortedHeadMoved))
+	}
 	var applyErr *safety.ApplyError
 	if !errors.As(err, &applyErr) {
 		return err

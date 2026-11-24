@@ -27,6 +27,7 @@ var english = map[Key]string{
 	LastDirtyWarning:     "\n  ! You have uncommitted changes. They are NOT saved to the backup and would be lost.\n",
 	LastDryRun:           "\nDry run. Re-run with --yes to apply it; a backup branch is always created first.\n",
 	LastAbortedDirty:     "aborted: uncommitted changes would be discarded; commit or stash them, or re-run with --force",
+	LastAbortedHeadMoved: "aborted: HEAD moved while the rescue was being worked out, so it could target the wrong branch; nothing was changed, run it again",
 	LastDone:             "\nDone. The previous state is saved on branch %s.\n",
 	LastFailedWithBackup: "the rescue failed while running %q: %v — nothing else was run, and your previous state is saved on branch %s",
 
@@ -115,6 +116,7 @@ var english = map[Key]string{
 	TuiWorking:            "Working...\n",
 	TuiError:              "Error: %s",
 	TuiErrDirtyTree:       "uncommitted changes would be discarded; press f to apply anyway, or quit and commit or stash them first",
+	TuiErrHeadMoved:       "HEAD moved since this history was read, so the rescue could target the wrong branch; nothing was changed — quit and run git rewind again",
 	TuiErrApplyFailed:     "%q failed: %v — your previous state is saved on branch %s",
 	TuiHelpTitle:          "Keys — %s",
 	TuiHelpSafety:         "  Nothing runs until you confirm it, and your current state is always saved\n  to a backup/rewind-<timestamp> branch first.",

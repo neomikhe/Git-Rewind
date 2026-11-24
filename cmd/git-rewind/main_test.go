@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/neomikhe/git-rewind/core/gitexec"
+	"github.com/neomikhe/git-rewind/core/i18n"
 	"github.com/neomikhe/git-rewind/internal/scenario"
 )
 
@@ -121,16 +122,21 @@ func TestLastNothingToUndo(t *testing.T) {
 }
 
 func TestLastAbortsOnDirtyTree(t *testing.T) {
+	t.Setenv(i18n.EnvVar, "en")
 	dir, lost := resetHardRepo(t)
 	before := headHash(t, dir)
 	writeFile(t, dir, "file.txt", "one\ndirty\n")
 
 	var buf bytes.Buffer
-	if err := run([]string{"last", "--yes"}, dir, &buf); err == nil {
-		t.Fatal("expected an error for a dirty working tree")
+	err := run([]string{"last", "--yes"}, dir, &buf)
+	if want := i18n.New(i18n.EN).T(i18n.LastAbortedDirty); err == nil || err.Error() != want {
+		t.Fatalf("run last --yes on a dirty tree = %v, want %q", err, want)
 	}
 	if head := headHash(t, dir); head != before {
 		t.Errorf("aborted rescue still moved HEAD to %s, want %s", head, before)
+	}
+	if backups := hermeticGit(t, dir)("branch", "--list", "backup/*"); backups != "" {
+		t.Errorf("an aborted rescue created a backup branch: %q", backups)
 	}
 
 	var buf2 bytes.Buffer
@@ -139,6 +145,31 @@ func TestLastAbortsOnDirtyTree(t *testing.T) {
 	}
 	if head := headHash(t, dir); head != lost {
 		t.Errorf("HEAD = %s after forced rescue, want %s", head, lost)
+	}
+}
+
+func TestLastYesWorksWhenTheReflogIsEmpty(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH")
+	}
+	dir := t.TempDir()
+	git := hermeticGit(t, dir)
+	git("init", "-q", "-b", "main")
+	git("config", "commit.gpgsign", "false")
+	writeFile(t, dir, "file.txt", "one\n")
+	git("add", "file.txt")
+	git("commit", "-q", "-m", "first commit")
+	parent := git("rev-parse", "HEAD")
+	writeFile(t, dir, "file.txt", "one\ntwo\n")
+	git("commit", "-q", "-am", "second commit")
+	git("reflog", "expire", "--expire=now", "--all")
+
+	var buf bytes.Buffer
+	if err := run([]string{"last", "--yes"}, dir, &buf); err != nil {
+		t.Fatalf("run last --yes with an empty reflog: %v", err)
+	}
+	if head := headHash(t, dir); head != parent {
+		t.Errorf("HEAD = %s, want the undone commit's parent %s", head, parent)
 	}
 }
 

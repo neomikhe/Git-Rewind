@@ -39,8 +39,8 @@ func TestPreviewNeverLetsAShellExpandAnArgument(t *testing.T) {
 		"$HOME":                             "'$HOME'",
 		"don't":                             `'don'"'"'t'`,
 		"x';calc;#":                         `'x'"'"';calc;#'`,
-		"don’t;calc;#":                      `'don'"’"'t;calc;#'`,
-		"‘a’‚b‛":                            `''"‘"'a'"’"''"‚"'b'"‛"''`,
+		"don\u2019t;calc;#":                 "'don'\"\u2019\"'t;calc;#'",
+		"\u2018a\u2019\u201ab\u201b":        "''\"\u2018\"'a'\"\u2019\"''\"\u201a\"'b'\"\u201b\"''",
 		"HEAD^1":                            "'HEAD^1'",
 		"@branch":                           "'@branch'",
 		"":                                  "''",
@@ -130,7 +130,7 @@ func TestApplyExecutesAfterBackup(t *testing.T) {
 
 	plan := Plan{Commands: []Command{{Args: []string{"reset", "--hard", "HEAD~1"}, Explain: "discard the last commit"}}}
 
-	res, err := Apply(ctx, git, plan, Options{Execute: true, Now: now})
+	res, err := Apply(ctx, git, plan, Options{Execute: true, Expected: headOf(t, git), Now: now})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestApplyReportsTheBackupWhenAPlanFailsPartway(t *testing.T) {
 	}
 
 	now := time.Date(2026, 7, 7, 14, 15, 0, 0, time.UTC)
-	res, err := Apply(context.Background(), git, plan, Options{Execute: true, Now: now})
+	res, err := Apply(context.Background(), git, plan, Options{Execute: true, Expected: headOf(t, git), Now: now})
 	if err == nil {
 		t.Fatal("expected the second command to fail")
 	}
@@ -238,4 +238,117 @@ func revParse(t *testing.T, git *gitexec.Runner, ref string) string {
 		t.Fatalf("rev-parse %s: %v", ref, err)
 	}
 	return strings.TrimSpace(out)
+}
+
+func TestApplyRefusesWhenHeadMovedAfterDetection(t *testing.T) {
+	dir, _, _ := twoCommitRepo(t)
+	git := gitexec.New(dir)
+	ctx := context.Background()
+	detectedAgainst := headOf(t, git)
+	if _, err := git.Mutate(ctx, "checkout", "-q", "-b", "elsewhere"); err != nil {
+		t.Fatal(err)
+	}
+
+	plan := Plan{Commands: []Command{{Args: []string{"reset", "--soft", "HEAD~1"}, Explain: "undo"}}}
+	_, err := Apply(ctx, git, plan, Options{Execute: true, Expected: detectedAgainst, Now: time.Now()})
+	if !errors.Is(err, ErrHeadMoved) {
+		t.Fatalf("Apply after a branch switch = %v, want ErrHeadMoved", err)
+	}
+	assertNoBackup(t, git)
+}
+
+func TestApplyRefusesWithoutTheHeadThePlanWasDetectedAgainst(t *testing.T) {
+	dir, _, _ := twoCommitRepo(t)
+	git := gitexec.New(dir)
+
+	plan := Plan{Commands: []Command{{Args: []string{"reset", "--soft", "HEAD~1"}, Explain: "undo"}}}
+	_, err := Apply(context.Background(), git, plan, Options{Execute: true, Now: time.Now()})
+	if !errors.Is(err, ErrHeadMoved) {
+		t.Fatalf("Apply with no expected HEAD = %v, want ErrHeadMoved", err)
+	}
+	assertNoBackup(t, git)
+}
+
+func TestApplyRefusesToDiscardATreeThatBecameDirty(t *testing.T) {
+	dir, first, second := twoCommitRepo(t)
+	git := gitexec.New(dir)
+	ctx := context.Background()
+	detectedAgainst := headOf(t, git)
+	writeFile(t, dir, "one\ntwo\nedited after the rescue was shown\n")
+
+	plan := Plan{
+		Commands:        []Command{{Args: []string{"reset", "--hard", "HEAD~1"}, Explain: "discard"}},
+		DiscardsChanges: true,
+	}
+	_, err := Apply(ctx, git, plan, Options{Execute: true, Expected: detectedAgainst, Now: time.Now()})
+	if !errors.Is(err, ErrDirtyTree) {
+		t.Fatalf("Apply on a dirty tree = %v, want ErrDirtyTree", err)
+	}
+	assertNoBackup(t, git)
+	if head := revParse(t, git, "HEAD"); head != second {
+		t.Fatalf("a refused plan moved HEAD to %s", head)
+	}
+
+	res, err := Apply(ctx, git, plan, Options{Execute: true, AllowDiscard: true, Expected: detectedAgainst, Now: time.Now()})
+	if err != nil {
+		t.Fatalf("Apply with AllowDiscard: %v", err)
+	}
+	if res.BackupBranch == "" || revParse(t, git, "HEAD") != first {
+		t.Errorf("forced Apply = %+v, want a backup and HEAD at %s", res, first)
+	}
+}
+
+func TestApplyKeepsADirtyTreeForAPlanThatPreservesIt(t *testing.T) {
+	dir, first, _ := twoCommitRepo(t)
+	git := gitexec.New(dir)
+	detectedAgainst := headOf(t, git)
+	writeFile(t, dir, "one\ntwo\nuncommitted\n")
+
+	plan := Plan{Commands: []Command{{Args: []string{"reset", "--soft", "HEAD~1"}, Explain: "undo, keep changes"}}}
+	if _, err := Apply(context.Background(), git, plan, Options{Execute: true, Expected: detectedAgainst, Now: time.Now()}); err != nil {
+		t.Fatalf("Apply refused a plan that keeps the working tree: %v", err)
+	}
+	if head := revParse(t, git, "HEAD"); head != first {
+		t.Errorf("HEAD = %s, want %s", head, first)
+	}
+}
+
+func headOf(t *testing.T, git *gitexec.Runner) gitexec.Head {
+	t.Helper()
+	head, err := git.HeadState(context.Background())
+	if err != nil {
+		t.Fatalf("HeadState: %v", err)
+	}
+	return head
+}
+
+func assertNoBackup(t *testing.T, git *gitexec.Runner) {
+	t.Helper()
+	branches, err := git.Run(context.Background(), "branch", "--list", backupPrefix+"*")
+	if err != nil {
+		t.Fatalf("listing backup branches: %v", err)
+	}
+	if strings.TrimSpace(branches) != "" {
+		t.Errorf("a refused plan still created a backup branch: %q", branches)
+	}
+}
+
+func TestWorkingTreeStatusSeesUntrackedFilesWhateverTheConfig(t *testing.T) {
+	dir, _, _ := twoCommitRepo(t)
+	git := gitexec.New(dir)
+	ctx := context.Background()
+	if _, err := git.Mutate(ctx, "config", "status.showUntrackedFiles", "no"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "untracked.txt"), []byte("not committed\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := WorkingTreeStatus(ctx, git)
+	if err != nil {
+		t.Fatalf("WorkingTreeStatus: %v", err)
+	}
+	if st.Clean {
+		t.Error("an untracked file went unseen because of status.showUntrackedFiles=no")
+	}
 }
