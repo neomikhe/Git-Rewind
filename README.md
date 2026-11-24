@@ -163,11 +163,13 @@ Put the binary anywhere on your `PATH`. Because Git dispatches `git <name>` to a
 called `git-<name>`, **`git rewind` then works as a native subcommand** — no aliases, no
 configuration.
 
-The first tagged release will also publish archives for Linux, macOS and Windows on amd64
-and arm64, with a `checksums.txt` (SHA-256) to verify them against, plus Homebrew and Scoop
-packages. Until then, the two commands above are the way in.
+From the first tagged release on, archives for Linux, macOS and Windows on amd64 and arm64
+are published on the [Releases](https://github.com/neomikhe/git-rewind/releases) page, with
+a `checksums.txt` (SHA-256) to verify them against. Homebrew, Scoop, AUR and winget packages
+are planned.
 
-**Requirements:** `git` on your `PATH` at runtime, and Go 1.26+ if you build from source.
+**Requirements:** `git` 2.19 or newer on your `PATH` at runtime, and Go 1.26+ if you build
+from source.
 Linux, macOS and Windows are all supported and all tested in CI.
 
 ## Usage
@@ -180,6 +182,7 @@ Linux, macOS and Windows are all supported and all tested in CI.
 | `git rewind last --yes --force` | Also allow it when the rescue would discard uncommitted changes. |
 | `git rewind find "<text>"` | Search unreachable commits by message and file contents. Read-only. |
 | `git rewind explain` | Diagnose the repository right now: HEAD, working tree, last event, what is recoverable. Read-only. |
+| `git rewind version` | Print the version, commit and platform — worth including in bug reports. |
 
 `last`, `find` and `explain` all accept `--json` for scripting. The document carries a
 `schema` field so a consumer can tell when the shape changes, errors still go to stderr with
@@ -191,7 +194,6 @@ $ git rewind explain --json | jq '.rescue.name, .unreachableCommits'
 "recover-after-reset-hard"
 1
 ```
-| `git rewind version` | Print the version, commit and platform — worth including in bug reports. |
 
 ## What it can rescue
 
@@ -281,7 +283,7 @@ contribution:
 ```go
 type Recipe interface {
     Name() string
-    Title() string
+    Title(p *i18n.Printer) string
     Detect(ctx context.Context, repo *Repo) (*safety.Plan, error)
 }
 ```
@@ -307,8 +309,9 @@ Four steps:
 Titles and warnings go through `core/i18n`, so a new recipe needs an English and a Spanish
 message; a missing one fails the catalogue test.
 
-Two suites then check the work automatically. `TestEveryPlanHonoursTheSafetyContract` runs
-every recipe against every fixture and rejects a plan with no commands, a command with no
+Two suites then check the work automatically. `TestAllRecipesAreWellFormed` rejects an empty
+or duplicate name and a missing title in either language. `TestEveryPlanHonoursTheSafetyContract`
+runs every recipe against every fixture and rejects a plan with no commands, a command with no
 explanation, a plan with no warning, or — most importantly — **a plan that overwrites the
 working tree without declaring `DiscardsChanges`**, which is what stops the dirty-tree guard
 from silently letting a rescue destroy uncommitted work.
@@ -341,8 +344,10 @@ run stay exactly as you would type them.
 
 ## Status
 
-Pre-release and under active development. The engine, the rescues and both front ends work
-and are tested; the first tagged release, packaged binaries and colour output are next.
+Pre-release and under active development. The engine, all eight rescues, both front ends,
+`find`, `explain`, `--json` and the Spanish translation work and are tested on Linux, macOS
+and Windows. The first tagged release is next, followed by Homebrew, Scoop, AUR and winget
+packages.
 
 ## License
 
@@ -375,6 +380,9 @@ Con el binario en el `PATH`, Git lo invoca como subcomando nativo: `git rewind`.
 - `git rewind` — línea de tiempo interactiva: navega los eventos, abre un rescate, apruébalo.
 - `git rewind last` — muestra el rescate del último error. No cambia nada.
 - `git rewind last --yes` — lo aplica, creando antes una rama de backup.
+- `git rewind find "<texto>"` — busca trabajo perdido en los commits que ninguna rama alcanza,
+  por mensaje y por contenido. Solo lectura.
+- `git rewind explain` — diagnostica el estado actual del repositorio. Solo lectura.
 
 **¿Es seguro?**
 
@@ -387,7 +395,7 @@ Con el binario en el `PATH`, Git lo invoca como subcomando nativo: `git rewind`.
   working tree se rechaza si hay cambios pendientes, salvo que lo fuerces explícitamente.
 - **No se reimplementa Git.** Todo se delega en tu propio binario `git`.
 
-Respaldándolo: **7 rescates y 7 repositorios rotos reproducibles**, con tests de integración
+Respaldándolo: **8 rescates y 7 repositorios rotos reproducibles**, con tests de integración
 que rompen un repositorio de verdad y comprueban que el rescate lo arregla. CI en Linux,
 macOS y Windows.
 
