@@ -12,16 +12,14 @@ import (
 
 const shortHashLen = 7
 
-// Repo is the repository state a recipe inspects: a git runner, the classified timeline, and
-// the printer its user-facing wording goes through.
+// Repo is the repository state a recipe inspects: its git runner, timeline and printer.
 type Repo struct {
 	Git     *gitexec.Runner
 	Events  []timeline.Event
 	Printer *i18n.Printer
 }
 
-// Say returns the repository's printer, defaulting to English when none was supplied. It
-// does not cache the default, so concurrent Detect calls cannot race on the field.
+// Say returns the repository's printer, or an English one when none was supplied.
 func (r *Repo) Say() *i18n.Printer {
 	if r.Printer == nil {
 		return i18n.New(i18n.EN)
@@ -49,15 +47,6 @@ func All() []Recipe {
 		UndoLastCommit{},
 		UndoLastCommitHard{},
 	}
-}
-
-func findEvent(events []timeline.Event, pred func(timeline.Event) bool) (int, bool) {
-	for i, e := range events {
-		if pred(e) {
-			return i, true
-		}
-	}
-	return 0, false
 }
 
 func previousHash(events []timeline.Event, i int) string {

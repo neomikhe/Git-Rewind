@@ -2,6 +2,7 @@ package recipes
 
 import (
 	"context"
+	"strings"
 
 	"github.com/neomikhe/git-rewind/core/i18n"
 	"github.com/neomikhe/git-rewind/core/safety"
@@ -23,7 +24,7 @@ func (RestoreDeletedBranch) Detect(ctx context.Context, repo *Repo) (*safety.Pla
 			continue
 		}
 		from, ok := parseCheckoutFrom(e.Entry.Subject)
-		if !ok || from == "" || looksLikeHash(from) {
+		if !ok || from == "" || strings.HasPrefix(from, "-") || looksLikeHash(from) {
 			continue
 		}
 		if refExists(ctx, repo.Git, "refs/heads/"+from) {

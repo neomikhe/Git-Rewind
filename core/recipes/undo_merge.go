@@ -2,6 +2,7 @@ package recipes
 
 import (
 	"context"
+	"strings"
 
 	"github.com/neomikhe/git-rewind/core/i18n"
 	"github.com/neomikhe/git-rewind/core/safety"
@@ -38,16 +39,10 @@ func (UndoRebase) Name() string { return "undo-rebase" }
 func (UndoRebase) Title(p *i18n.Printer) string { return p.T(i18n.RecipeUndoRebaseTitle) }
 
 func (UndoRebase) Detect(_ context.Context, repo *Repo) (*safety.Plan, error) {
-	if len(repo.Events) == 0 || repo.Events[0].Kind != timeline.KindRebase {
-		return nil, nil
-	}
-	i, ok := findEvent(repo.Events, func(e timeline.Event) bool {
-		return e.Kind == timeline.KindRebase && len(e.Orphaned) > 0
-	})
+	preRebase, ok := strandedByCurrentRebase(repo.Events)
 	if !ok {
 		return nil, nil
 	}
-	preRebase := repo.Events[i].Orphaned[0]
 	p := repo.Say()
 
 	return &safety.Plan{
@@ -58,4 +53,41 @@ func (UndoRebase) Detect(_ context.Context, repo *Repo) (*safety.Plan, error) {
 		Warnings:        []string{p.T(i18n.RecipeUndoRebaseWarning)},
 		DiscardsChanges: true,
 	}, nil
+}
+
+func strandedByCurrentRebase(events []timeline.Event) (string, bool) {
+	if len(events) == 0 || !isRebaseFinish(events[0]) {
+		return "", false
+	}
+	for _, e := range events {
+		if isRebaseStart(e) {
+			if len(e.Orphaned) == 0 {
+				return "", false
+			}
+			return e.Orphaned[0], true
+		}
+		if !happensDuringARebase(e.Kind) {
+			return "", false
+		}
+	}
+	return "", false
+}
+
+func isRebaseFinish(e timeline.Event) bool {
+	return e.Kind == timeline.KindRebase && strings.Contains(e.Entry.Operation, "finish")
+}
+
+func isRebaseStart(e timeline.Event) bool {
+	return e.Kind == timeline.KindRebase &&
+		(strings.Contains(e.Entry.Operation, "(start)") ||
+			strings.HasPrefix(e.Entry.Subject, "rebase: checkout "))
+}
+
+func happensDuringARebase(k timeline.Kind) bool {
+	switch k {
+	case timeline.KindRebase, timeline.KindCommit, timeline.KindAmend, timeline.KindReset:
+		return true
+	default:
+		return false
+	}
 }

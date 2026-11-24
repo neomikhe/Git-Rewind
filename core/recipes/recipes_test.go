@@ -155,6 +155,40 @@ func TestRestoreDeletedBranchRecreatesRef(t *testing.T) {
 	}
 }
 
+func TestRestoreDeletedBranchRefusesFlagLikeNames(t *testing.T) {
+	cases := []struct {
+		name     string
+		checkout []string
+		want     string
+	}{
+		{"ordinary name", []string{"gone"}, "gone"},
+		{"long flag", []string{"--orphan"}, ""},
+		{"short flag", []string{"-D"}, ""},
+		{"flag over a real deletion", []string{"gone", "-D"}, "gone"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir, first, run := twoCommitRepoWithRunner(t)
+			targets := []string{first, run("rev-parse", "HEAD")}
+			for i, from := range c.checkout {
+				run("update-ref", "-m", "checkout: moving from "+from+" to main", "HEAD", targets[i%2])
+			}
+
+			plan, err := RestoreDeletedBranch{}.Detect(context.Background(), loadRepo(t, dir))
+			if err != nil {
+				t.Fatalf("Detect: %v", err)
+			}
+			got := ""
+			if plan != nil {
+				got = plan.Commands[0].Args[1]
+			}
+			if got != c.want {
+				t.Errorf("plan restores %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
 func TestUndoMergeRestoresPreMerge(t *testing.T) {
 	built := buildScenario(t, "pre-merge")
 	repo := loadRepo(t, built.Dir)
@@ -174,6 +208,86 @@ func TestUndoRebaseRestoresPreRebase(t *testing.T) {
 
 	if head := revParse(t, repo.Git, "HEAD"); head != built.Anchors["preRebase"] {
 		t.Errorf("HEAD = %s after undo-rebase, want preRebase %s", head, built.Anchors["preRebase"])
+	}
+}
+
+func TestUndoRebaseIgnoresAnOlderRebaseOnAnotherBranch(t *testing.T) {
+	dir, run := newRepo(t)
+	commitNamedFile(t, dir, run, "base.txt", "base")
+	run("checkout", "-q", "-b", "old")
+	commitNamedFile(t, dir, run, "old.txt", "old work")
+	run("checkout", "-q", "main")
+	commitNamedFile(t, dir, run, "main1.txt", "main one")
+	run("checkout", "-q", "old")
+	run("rebase", "-q", "main")
+	run("checkout", "-q", "-b", "feature", "main")
+	commitNamedFile(t, dir, run, "feature.txt", "feature work")
+	run("branch", "keep")
+	run("checkout", "-q", "main")
+	commitNamedFile(t, dir, run, "main2.txt", "main two")
+	run("checkout", "-q", "feature")
+	run("rebase", "-q", "main")
+
+	plan, err := UndoRebase{}.Detect(context.Background(), loadRepo(t, dir))
+	if err != nil {
+		t.Fatalf("Detect: %v", err)
+	}
+	if plan != nil {
+		t.Errorf("offered %v after a rebase that stranded nothing, want no plan", plan.Commands[0].Args)
+	}
+}
+
+func TestUndoRebaseTrustsOnlyTheOrphanOfTheRebaseStart(t *testing.T) {
+	const keepTodo, stopAtEnd = "sequence.editor=echo >>", "sequence.editor=echo break >>"
+	cases := []struct {
+		name     string
+		rebase   func(run func(args ...string) string)
+		wantPlan bool
+	}{
+		{"fixup squashed during the rebase", func(run func(args ...string) string) {
+			run("-c", keepTodo, "rebase", "-q", "-i", "--autosquash", "main")
+		}, true},
+		{"commit amended while the rebase was stopped", func(run func(args ...string) string) {
+			run("-c", stopAtEnd, "rebase", "-q", "-i", "main")
+			run("commit", "-q", "--amend", "-m", "amended while the rebase was stopped")
+			run("rebase", "--continue")
+		}, true},
+		{"rebase aborted", func(run func(args ...string) string) {
+			run("-c", stopAtEnd, "rebase", "-q", "-i", "main")
+			run("rebase", "--abort")
+		}, false},
+		{"rebase still in progress", func(run func(args ...string) string) {
+			run("-c", stopAtEnd, "rebase", "-q", "-i", "main")
+		}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir, run := newRepo(t)
+			commitNamedFile(t, dir, run, "base.txt", "base")
+			run("checkout", "-q", "-b", "feature")
+			commitNamedFile(t, dir, run, "a.txt", "feature A")
+			commitNamedFile(t, dir, run, "b.txt", "feature B")
+			commitNamedFile(t, dir, run, "a.txt", "fixup! feature A")
+			run("checkout", "-q", "main")
+			commitNamedFile(t, dir, run, "main.txt", "main moved on")
+			run("checkout", "-q", "feature")
+			preRebase := run("rev-parse", "HEAD")
+
+			c.rebase(run)
+
+			plan, err := UndoRebase{}.Detect(context.Background(), loadRepo(t, dir))
+			if err != nil {
+				t.Fatalf("Detect: %v", err)
+			}
+			switch {
+			case !c.wantPlan && plan != nil:
+				t.Errorf("offered %v, want no plan", plan.Commands[0].Args)
+			case c.wantPlan && plan == nil:
+				t.Error("no plan offered, want a reset to the pre-rebase tip")
+			case c.wantPlan && plan.Commands[0].Args[2] != preRebase:
+				t.Errorf("plan resets to %s, want the pre-rebase tip %s", plan.Commands[0].Args[2], preRebase)
+			}
+		})
 	}
 }
 
@@ -398,14 +512,29 @@ func newRepo(t *testing.T) (dir string, run func(args ...string) string) {
 
 func twoCommitRepo(t *testing.T) (dir, first string) {
 	t.Helper()
-	dir, run := newRepo(t)
+	dir, first, _ = twoCommitRepoWithRunner(t)
+	return dir, first
+}
+
+func twoCommitRepoWithRunner(t *testing.T) (dir, first string, run func(args ...string) string) {
+	t.Helper()
+	dir, run = newRepo(t)
 	writeFile(t, dir, "one\n")
 	run("add", "f.txt")
 	run("commit", "-q", "-m", "first commit")
 	first = run("rev-parse", "HEAD")
 	writeFile(t, dir, "one\ntwo\n")
 	run("commit", "-q", "-am", "second commit")
-	return dir, first
+	return dir, first, run
+}
+
+func commitNamedFile(t *testing.T, dir string, run func(args ...string) string, name, msg string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(msg+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	run("add", name)
+	run("commit", "-q", "-m", msg)
 }
 
 func writeFile(t *testing.T, dir, content string) {
