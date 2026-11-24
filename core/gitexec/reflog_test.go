@@ -69,8 +69,8 @@ func TestReflogParsesRealRepo(t *testing.T) {
 		if len(e.Hash) != 40 {
 			t.Errorf("entry %d: Hash = %q, want 40 hex chars", i, e.Hash)
 		}
-		if e.ActorName != "Test User" {
-			t.Errorf("entry %d: ActorName = %q, want \"Test User\"", i, e.ActorName)
+		if e.ActorName != "Rewind Test" {
+			t.Errorf("entry %d: ActorName = %q, want \"Rewind Test\"", i, e.ActorName)
 		}
 	}
 }
@@ -142,8 +142,8 @@ func TestReflogLimitReturnsTheMostRecentEntries(t *testing.T) {
 func initRepo(t *testing.T, dir string) {
 	t.Helper()
 	runGitEnv(t, dir, nil, "init", "-q", "-b", "main")
-	runGitEnv(t, dir, nil, "config", "user.name", "Test User")
-	runGitEnv(t, dir, nil, "config", "user.email", "test@example.com")
+	runGitEnv(t, dir, nil, "config", "user.name", "Rewind Test")
+	runGitEnv(t, dir, nil, "config", "user.email", "test@example.invalid")
 }
 
 func runGit(t *testing.T, dir string, when time.Time, args ...string) {

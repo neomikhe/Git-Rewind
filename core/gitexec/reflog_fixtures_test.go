@@ -87,6 +87,13 @@ func TestParseReflogFixtures(t *testing.T) {
 			},
 		},
 		{
+			name: "foreign subject containing the field separator",
+			raw:  entryLine("HEAD@{1700000000}", h1, "Bo", "bo@example.invalid", "cherry-pick: odd"+unitSepFixture+"subject") + "\n",
+			want: []ReflogEntry{
+				{Index: 0, Ref: "HEAD", Time: atUnix(1700000000), Hash: h1, ActorName: "Bo", ActorEmail: "bo@example.invalid", Subject: "cherry-pick: odd" + unitSepFixture + "subject", Operation: "cherry-pick"},
+			},
+		},
+		{
 			name: "CRLF line endings",
 			raw:  entryLine("HEAD@{1700000000}", h1, "Bo", "bo@example.invalid", "commit: crlf output") + "\r\n",
 			want: []ReflogEntry{

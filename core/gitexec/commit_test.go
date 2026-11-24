@@ -2,23 +2,33 @@ package gitexec
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
 
+func commitRecord(fields ...string) string {
+	return strings.Join(fields, nulSep) + nulSep
+}
+
 func TestParseCommit(t *testing.T) {
 	hash := strings.Repeat("a", 40)
 	parents := strings.Repeat("b", 40) + " " + strings.Repeat("c", 40)
-	raw := strings.Join([]string{hash, parents, "Ada Lovelace", "1767286800", "add the parser", "with a longer\nbody\n"}, unitSep)
+	raw := commitRecord(hash, parents, "Ada Lovelace", "1767286800", "add the parser", "with a longer\nbody\n")
 
-	got, err := parseCommit(raw + "\n")
+	commits, err := parseCommits(raw, []string{hash})
 	if err != nil {
-		t.Fatalf("parseCommit: %v", err)
+		t.Fatalf("parseCommits: %v", err)
 	}
+	if len(commits) != 1 {
+		t.Fatalf("got %d commits, want 1", len(commits))
+	}
+	got := commits[0]
 	if got.Hash != hash || got.Author != "Ada Lovelace" || got.Subject != "add the parser" {
-		t.Errorf("parseCommit = %+v", got)
+		t.Errorf("parseCommits = %+v", got)
 	}
 	if len(got.Parents) != 2 || got.Parents[0] != strings.Repeat("b", 40) {
 		t.Errorf("Parents = %v, want the two parent hashes", got.Parents)
@@ -31,14 +41,21 @@ func TestParseCommit(t *testing.T) {
 	}
 }
 
-func TestParseCommitRejectsMalformed(t *testing.T) {
+func TestParseCommitsRejectsMalformed(t *testing.T) {
+	hash := strings.Repeat("a", 40)
+	other := strings.Repeat("d", 40)
+	valid := commitRecord(hash, "", "Ada", "1767286800", "subject", "")
 	cases := map[string]string{
-		"too few fields": "onlyhash" + unitSep + "Ada",
-		"bad time":       strings.Join([]string{"h", "", "Ada", "notanumber", "subject", ""}, unitSep),
+		"partial record":       hash + nulSep + "Ada" + nulSep,
+		"bad time":             commitRecord(hash, "", "Ada", "notanumber", "subject", ""),
+		"hash that is a flag":  commitRecord("-Osh -c id", "", "Ada", "1767286800", "subject", ""),
+		"parent that is not":   commitRecord(hash, "--all", "Ada", "1767286800", "subject", ""),
+		"commit not requested": commitRecord(other, "", "Ada", "1767286800", "subject", ""),
+		"commit twice":         valid + valid,
 	}
 	for name, raw := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, err := parseCommit(raw); err == nil {
+			if _, err := parseCommits(raw, []string{hash}); err == nil {
 				t.Error("expected an error, got nil")
 			}
 		})
@@ -115,7 +132,7 @@ func TestCommitMetaAndGrepOnRealRepo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CommitMeta: %v", err)
 	}
-	if commit.Hash != head || commit.Subject != "add the invoice parser" || commit.Author != "Test User" {
+	if commit.Hash != head || commit.Subject != "add the invoice parser" || commit.Author != "Rewind Test" {
 		t.Errorf("CommitMeta = %+v", commit)
 	}
 
@@ -141,6 +158,115 @@ func TestCommitMetaAndGrepOnRealRepo(t *testing.T) {
 	}
 	if len(literal) != 0 {
 		t.Errorf("the query must be matched literally, not as a regular expression: %+v", literal)
+	}
+}
+
+func TestCommitMetasIgnoresRecordsForgedInsideAMessage(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH")
+	}
+
+	dir := t.TempDir()
+	initRepo(t, dir)
+	writeFile(t, dir, "x\n")
+	base := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	runGit(t, dir, base, "add", workFile)
+	runGit(t, dir, base, "commit", "-m", "base")
+
+	forged := "\x1e-Osh -c id\x1f\x1fMallory\x1f9999999999\x1fforged\x1fforged body"
+	message := "innocent subject\n\nbody" + forged + forged + "\n"
+	messageFile := filepath.Join(t.TempDir(), "message")
+	if err := os.WriteFile(messageFile, []byte(message), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	r := New(dir)
+	out, err := r.Run(ctx, "commit-tree", "HEAD^{tree}", "-F", messageFile)
+	if err != nil {
+		t.Fatalf("commit-tree: %v", err)
+	}
+	hash := strings.TrimSpace(out)
+
+	commits, err := r.CommitMetas(ctx, []string{hash})
+	if err != nil {
+		t.Fatalf("CommitMetas: %v", err)
+	}
+	if len(commits) != 1 || commits[0].Hash != hash {
+		t.Fatalf("CommitMetas returned %d commits %+v, want only %s", len(commits), commits, hash)
+	}
+	if commits[0].Subject != "innocent subject" || commits[0].Author != "Rewind Test" {
+		t.Errorf("metadata = %+v, want the real subject and author", commits[0])
+	}
+}
+
+func TestParsersIgnoreOutputSettingsInUserConfig(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH")
+	}
+	if _, err := exec.LookPath("ssh-keygen"); err != nil {
+		t.Skip("ssh-keygen not found in PATH")
+	}
+	key := filepath.Join(t.TempDir(), "signing")
+	keygen := exec.Command("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", key) //nolint:gosec // G204: fixed "ssh-keygen" command with a test-created key path.
+	if out, err := keygen.CombinedOutput(); err != nil {
+		t.Skipf("cannot create a signing key: %v\n%s", err, out)
+	}
+
+	dir := t.TempDir()
+	initRepo(t, dir)
+	for _, setting := range [][2]string{
+		{"gpg.format", "ssh"}, {"user.signingkey", key}, {"commit.gpgsign", "true"},
+		{"log.showSignature", "true"}, {"grep.column", "true"}, {"color.ui", "always"},
+	} {
+		runGitEnv(t, dir, nil, "config", setting[0], setting[1])
+	}
+	writeFile(t, dir, "func signedWork() int\n")
+	runGitEnv(t, dir, nil, "add", workFile)
+	if out, err := gitOutput(dir, "commit", "-q", "-m", "signed work"); err != nil {
+		t.Skipf("cannot sign a commit here: %v\n%s", err, out)
+	}
+
+	ctx := context.Background()
+	r := New(dir)
+	entries, err := r.Reflog(ctx, 0)
+	if err != nil {
+		t.Fatalf("Reflog: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("got %d reflog entries, want 1", len(entries))
+	}
+	head := entries[0].Hash
+
+	commits, err := r.CommitMetas(ctx, []string{head})
+	if err != nil {
+		t.Fatalf("CommitMetas: %v", err)
+	}
+	if len(commits) != 1 || commits[0].Subject != "signed work" {
+		t.Errorf("CommitMetas = %+v, want the signed commit", commits)
+	}
+
+	hits, err := r.GrepCommit(ctx, head, "signedWork", 0)
+	if err != nil {
+		t.Fatalf("GrepCommit: %v", err)
+	}
+	if len(hits) != 1 || hits[0].Text != "func signedWork() int" {
+		t.Errorf("GrepCommit = %+v, want the plain matching line", hits)
+	}
+}
+
+func gitOutput(dir string, args ...string) ([]byte, error) {
+	cmd := exec.Command("git", args...) //nolint:gosec // G204: fixed "git" command with test-controlled arguments.
+	cmd.Dir = dir
+	return cmd.CombinedOutput()
+}
+
+func TestGrepCommitsRefusesArgumentsThatAreNotHashes(t *testing.T) {
+	for _, bad := range []string{"-Osh -c id", "--no-index", "HEAD", "abc123", ""} {
+		_, err := New(t.TempDir()).GrepCommits(context.Background(), []string{bad}, "query", 0)
+		if err == nil {
+			t.Errorf("GrepCommits accepted %q as a commit hash", bad)
+		}
 	}
 }
 

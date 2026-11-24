@@ -43,8 +43,7 @@ type ReflogEntry struct {
 	Operation  string
 }
 
-// Reflog returns reflog entries, most recent first, at most limit of them when limit is
-// positive and all of them otherwise; an unborn HEAD yields none.
+// Reflog returns up to limit reflog entries, newest first; a non-positive limit returns all.
 func (r *Runner) Reflog(ctx context.Context, limit int) ([]ReflogEntry, error) {
 	born, err := r.hasCommits(ctx)
 	if err != nil {
@@ -58,7 +57,7 @@ func (r *Runner) Reflog(ctx context.Context, limit int) ([]ReflogEntry, error) {
 	if limit > 0 {
 		args = append(args, "-n", strconv.Itoa(limit))
 	}
-	args = append(args, "--date=unix", "--format="+reflogFormat)
+	args = append(args, "--no-show-signature", "--date=unix", "--format="+reflogFormat)
 
 	out, err := r.run(ctx, args...)
 	if err != nil {
@@ -115,9 +114,9 @@ func parseReflog(out []byte) ([]ReflogEntry, error) {
 			continue
 		}
 
-		fields := strings.Split(line, unitSep)
+		fields := strings.SplitN(line, unitSep, reflogFields)
 		if len(fields) != reflogFields {
-			return nil, fmt.Errorf("reflog entry %d: expected %d fields, got %d: %q", len(entries), reflogFields, len(fields), line)
+			return nil, fmt.Errorf("reflog entry %d: expected %d fields, got %d", len(entries), reflogFields, len(fields))
 		}
 
 		ref, when, err := parseSelector(fields[0])

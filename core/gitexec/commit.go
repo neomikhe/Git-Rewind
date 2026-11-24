@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	recordSep    = "\x1e"
-	commitFormat = "%x1e%H" + unitSep + "%P" + unitSep + "%an" + unitSep + "%at" + unitSep + "%s" + unitSep + "%b"
+	nulSep       = "\x00"
+	commitFormat = "%H%x00%P%x00%an%x00%at%x00%s%x00%b"
 	commitFields = 6
 	grepFields   = 3
 	batchSize    = 100
@@ -51,16 +51,19 @@ func (r *Runner) CommitMeta(ctx context.Context, hash string) (Commit, error) {
 
 // CommitMetas reads many commits' metadata in as few git invocations as possible.
 func (r *Runner) CommitMetas(ctx context.Context, hashes []string) ([]Commit, error) {
+	if err := requireFullHashes(hashes); err != nil {
+		return nil, err
+	}
 	commits := make([]Commit, 0, len(hashes))
 	for start := 0; start < len(hashes); start += batchSize {
 		end := min(start+batchSize, len(hashes))
 
-		args := append([]string{"log", "--no-walk", "--format=" + commitFormat}, hashes[start:end]...)
+		args := append([]string{"log", "-z", "--no-walk", "--no-show-signature", "--format=" + commitFormat}, hashes[start:end]...)
 		out, err := r.run(ctx, args...)
 		if err != nil {
 			return nil, err
 		}
-		batch, err := parseCommits(string(out))
+		batch, err := parseCommits(string(out), hashes[start:end])
 		if err != nil {
 			return nil, err
 		}
@@ -69,16 +72,29 @@ func (r *Runner) CommitMetas(ctx context.Context, hashes []string) ([]Commit, er
 	return commits, nil
 }
 
-func parseCommits(out string) ([]Commit, error) {
-	var commits []Commit
-	for _, record := range strings.Split(out, recordSep) {
-		if strings.TrimSpace(record) == "" {
-			continue
-		}
-		commit, err := parseCommit(record)
+func parseCommits(out string, requested []string) ([]Commit, error) {
+	if out == "" {
+		return nil, nil
+	}
+	fields := strings.Split(strings.TrimSuffix(out, nulSep), nulSep)
+	if len(fields)%commitFields != 0 {
+		return nil, fmt.Errorf("commit metadata: %d fields do not form whole records of %d", len(fields), commitFields)
+	}
+
+	pending := make(map[string]bool, len(requested))
+	for _, hash := range requested {
+		pending[hash] = true
+	}
+	commits := make([]Commit, 0, len(fields)/commitFields)
+	for start := 0; start < len(fields); start += commitFields {
+		commit, err := parseCommit(fields[start : start+commitFields])
 		if err != nil {
 			return nil, err
 		}
+		if !pending[commit.Hash] {
+			return nil, fmt.Errorf("commit metadata: commit %s was not requested or appeared twice", commit.Hash)
+		}
+		delete(pending, commit.Hash)
 		commits = append(commits, commit)
 	}
 	return commits, nil
@@ -89,10 +105,13 @@ func isNoMatch(err error) bool {
 	return errors.As(err, &exitErr) && exitErr.ExitCode() == 1
 }
 
-func parseCommit(out string) (Commit, error) {
-	fields := strings.SplitN(strings.TrimRight(out, "\n"), unitSep, commitFields)
-	if len(fields) != commitFields {
-		return Commit{}, fmt.Errorf("commit metadata: expected %d fields, got %d", commitFields, len(fields))
+func parseCommit(fields []string) (Commit, error) {
+	if !isFullHash(fields[0]) {
+		return Commit{}, fmt.Errorf("commit metadata: %q is not a full commit hash", fields[0])
+	}
+	parents := strings.Fields(fields[1])
+	if err := requireFullHashes(parents); err != nil {
+		return Commit{}, fmt.Errorf("commit %s parents: %w", fields[0], err)
 	}
 
 	secs, err := strconv.ParseInt(fields[3], 10, 64)
@@ -102,7 +121,7 @@ func parseCommit(out string) (Commit, error) {
 
 	return Commit{
 		Hash:    fields[0],
-		Parents: strings.Fields(fields[1]),
+		Parents: parents,
 		Author:  fields[2],
 		When:    time.Unix(secs, 0).UTC(),
 		Subject: fields[4],
@@ -112,12 +131,15 @@ func parseCommit(out string) (Commit, error) {
 
 // GrepCommits searches many commits' trees at once, returning matching lines keyed by hash.
 func (r *Runner) GrepCommits(ctx context.Context, hashes []string, query string, limitPerCommit int) (map[string][]GrepMatch, error) {
+	if err := requireFullHashes(hashes); err != nil {
+		return nil, err
+	}
 	matches := make(map[string][]GrepMatch, len(hashes))
 
 	for start := 0; start < len(hashes); start += batchSize {
 		end := min(start+batchSize, len(hashes))
 
-		args := []string{"grep", "-I", "-n", "-z", "-i", "-F", "-e", query}
+		args := []string{"grep", "--no-color", "--no-column", "-I", "-n", "-z", "-i", "-F", "-e", query}
 		args = append(args, hashes[start:end]...)
 
 		out, err := r.run(ctx, args...)

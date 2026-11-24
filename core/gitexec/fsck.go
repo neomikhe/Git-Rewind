@@ -19,10 +19,11 @@ func (r *Runner) Orphans(ctx context.Context) (map[string]struct{}, error) {
 	return parseDanglingCommits(out), nil
 }
 
-// Unreachable returns tip and every commit below it that no branch or tag reaches, newest
-// first. A dangling tip is only the head of a lost chain; the commits under it are just as
-// recoverable and just as worth searching.
+// Unreachable returns tip and every commit below it that no branch or tag reaches, newest first.
 func (r *Runner) Unreachable(ctx context.Context, tip string) ([]string, error) {
+	if err := requireFullHashes([]string{tip}); err != nil {
+		return nil, err
+	}
 	out, err := r.run(ctx, "rev-list", tip, "--not", "--all")
 	if err != nil {
 		return nil, err
@@ -31,9 +32,14 @@ func (r *Runner) Unreachable(ctx context.Context, tip string) ([]string, error) 
 	var hashes []string
 	scanner := bufio.NewScanner(bytes.NewReader(out))
 	for scanner.Scan() {
-		if hash := strings.TrimSpace(scanner.Text()); hash != "" {
-			hashes = append(hashes, hash)
+		hash := strings.TrimSpace(scanner.Text())
+		if hash == "" {
+			continue
 		}
+		if !isFullHash(hash) {
+			return nil, fmt.Errorf("rev-list returned %q, not a commit hash", hash)
+		}
+		hashes = append(hashes, hash)
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("reading rev-list output: %w", err)
@@ -50,7 +56,7 @@ func parseDanglingCommits(out []byte) map[string]struct{} {
 		if !ok {
 			continue
 		}
-		if hash = strings.TrimSpace(hash); hash != "" {
+		if hash = strings.TrimSpace(hash); isFullHash(hash) {
 			orphans[hash] = struct{}{}
 		}
 	}
