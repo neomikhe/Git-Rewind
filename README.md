@@ -21,6 +21,8 @@ as a preview you approve.
 
 ## The ten-second rescue
 
+![git rewind showing, then applying, the rescue for a commit lost to git reset --hard](.github/demo.gif)
+
 ```console
 $ git reset --hard HEAD~1        # ...and there goes the whole afternoon
 
