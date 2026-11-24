@@ -131,3 +131,16 @@ func operationOf(subject string) string {
 	before, _, _ := strings.Cut(subject, ":")
 	return strings.TrimSpace(before)
 }
+
+func TestDescribeNeverCarriesTerminalControls(t *testing.T) {
+	for _, subject := range []string{
+		"commit: evil \x1b]52;c;ZXZpbA==\x07 subject",
+		"checkout: moving from main to evil\u202egnp",
+		"something unknown \x1b[2J",
+	} {
+		e := FromReflog([]gitexec.ReflogEntry{{Subject: subject, Operation: operationOf(subject)}})[0]
+		if got := e.Describe(i18n.New(i18n.EN)); strings.ContainsAny(got, "\x1b\x07\u202e") {
+			t.Errorf("Describe(%q) = %q, carries a terminal control character", subject, got)
+		}
+	}
+}

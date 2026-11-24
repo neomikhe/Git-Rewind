@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/neomikhe/git-rewind/core/gitexec"
 	"github.com/neomikhe/git-rewind/core/i18n"
 )
 
@@ -42,7 +43,7 @@ func (e Event) Describe(p *i18n.Printer) string {
 	case n > 1:
 		base += p.T(i18n.EventOrphanSuffixMany, n)
 	}
-	return base
+	return gitexec.Printable(base)
 }
 
 // CommitCount renders a commit total with the right singular or plural form.

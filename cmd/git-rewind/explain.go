@@ -128,7 +128,7 @@ func headSummary(p *i18n.Printer, h gitexec.Head) string {
 	if h.Detached {
 		return p.T(i18n.ExplainHeadDetached, shortHash(h.Hash))
 	}
-	return p.T(i18n.ExplainHeadOnBranch, h.Branch, shortHash(h.Hash))
+	return p.T(i18n.ExplainHeadOnBranch, gitexec.Printable(h.Branch), shortHash(h.Hash))
 }
 
 func treeSummary(p *i18n.Printer, s safety.Status) string {

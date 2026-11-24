@@ -84,7 +84,7 @@ func describeSearch(p *i18n.Printer, r search.Result) string {
 			b.WriteString(p.T(i18n.FindMessageMatches))
 		}
 		for _, hit := range m.InFiles {
-			fmt.Fprintf(&b, "      %s:%d  %s\n", hit.Path, hit.Line, clip(strings.TrimSpace(hit.Text)))
+			fmt.Fprintf(&b, "      %s:%d  %s\n", gitexec.Printable(hit.Path), hit.Line, clip(gitexec.Printable(strings.TrimSpace(hit.Text))))
 		}
 		b.WriteString(p.T(i18n.FindKeepWith, rescuePrefix+shortHash(m.Commit.Hash), m.Commit.Hash))
 	}
@@ -114,7 +114,7 @@ func matchHeading(m search.Match) string {
 	return fmt.Sprintf("  %s  %s  %s  %q",
 		shortHash(m.Commit.Hash),
 		m.Commit.When.Format("2006-01-02 15:04"),
-		m.Commit.Author,
+		gitexec.Printable(m.Commit.Author),
 		m.Commit.Subject)
 }
 

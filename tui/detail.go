@@ -5,6 +5,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/neomikhe/git-rewind/core/gitexec"
 	"github.com/neomikhe/git-rewind/core/i18n"
 	"github.com/neomikhe/git-rewind/core/timeline"
 )
@@ -18,9 +19,9 @@ func (m model) detailView() string {
 		{m.say(i18n.TuiFieldKind), e.Kind.String()},
 		{m.say(i18n.TuiFieldRisk), riskStyle(e.Risk).Render(e.Risk.String())},
 		{m.say(i18n.TuiFieldCommit), shortHash(e.Entry.Hash)},
-		{m.say(i18n.TuiFieldWho), e.Entry.ActorName},
+		{m.say(i18n.TuiFieldWho), gitexec.Printable(e.Entry.ActorName)},
 		{m.say(i18n.TuiFieldWhat), e.Describe(p)},
-		{m.say(i18n.TuiFieldReflog), e.Entry.Subject},
+		{m.say(i18n.TuiFieldReflog), gitexec.Printable(e.Entry.Subject)},
 	}
 
 	var b strings.Builder
