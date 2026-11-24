@@ -2,6 +2,10 @@ version: 2
 
 project_name: git-rewind
 
+# A pre-release such as v0.2.0-rc1 must sort below v0.2.0 when both tags share a commit.
+git:
+  prerelease_suffix: "-"
+
 builds:
   - id: git-rewind
     main: ./cmd/git-rewind
@@ -53,6 +57,7 @@ changelog:
       - "^chore"
       - "^ci"
       - "^test"
+      - "^Merge"
   groups:
     - title: Features
       regexp: "^feat"
@@ -70,7 +75,8 @@ release:
   prerelease: auto
   footer: |
     Install the binary as `git-rewind` anywhere on your PATH and Git will run it as
-    `git rewind`. Verify a download against `checksums.txt` before using it.
+    `git rewind`. Verify a download against `checksums.txt`, and its build provenance with
+    `gh attestation verify <archive> --repo neomikhe/Git-Rewind`, before using it.
 
 # Homebrew and Scoop publishing is written and ready but not switched on: it pushes to
 # repositories that must exist first (neomikhe/homebrew-tap, neomikhe/scoop-bucket) using a
