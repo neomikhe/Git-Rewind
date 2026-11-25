@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -26,10 +27,12 @@ import (
 const (
 	allEvents    = 0
 	shortHashLen = 7
+	devVersion   = "dev"
+	develVersion = "(devel)"
 )
 
 var (
-	version = "dev"
+	version = devVersion
 	commit  = "none"
 	date    = "unknown"
 )
@@ -186,8 +189,27 @@ func describeApplyFailure(p *i18n.Printer, err error) error {
 }
 
 func versionLine() string {
+	v, c, d := version, commit, date
+	if info, ok := debug.ReadBuildInfo(); ok && v == devVersion {
+		v, c, d = fromBuildInfo(info, v, c, d)
+	}
 	return fmt.Sprintf("git-rewind %s (commit %s, built %s, %s/%s)\n",
-		version, commit, date, runtime.GOOS, runtime.GOARCH)
+		v, c, d, runtime.GOOS, runtime.GOARCH)
+}
+
+func fromBuildInfo(info *debug.BuildInfo, v, c, d string) (string, string, string) {
+	if mv := info.Main.Version; mv != "" && mv != develVersion {
+		v = strings.TrimPrefix(mv, "v")
+	}
+	for _, s := range info.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			c = s.Value
+		case "vcs.time":
+			d = s.Value
+		}
+	}
+	return v, c, d
 }
 
 func flush(w io.Writer, s string) error {
