@@ -165,18 +165,17 @@ Put the binary anywhere on your `PATH`. Because Git dispatches `git <name>` to a
 called `git-<name>`, **`git rewind` then works as a native subcommand** — no aliases, no
 configuration.
 
-From the first tagged release on, archives for Linux, macOS and Windows on amd64 and arm64
-are published on the [Releases](https://github.com/neomikhe/git-rewind/releases) page, with
-a `checksums.txt` (SHA-256) to verify them against. Homebrew, Scoop, AUR and winget packages
-are planned.
+Archives for Linux, macOS and Windows on amd64 and arm64 are published on the
+[Releases](https://github.com/neomikhe/git-rewind/releases) page, with a `checksums.txt`
+(SHA-256) to verify them against. Homebrew, Scoop, AUR and winget packages are planned.
 
 Every archive also carries a build provenance attestation signed by GitHub, which proves it
 was built by this repository's release workflow from the tagged commit — something a
 checksum published next to the file cannot prove. With the
-[GitHub CLI](https://cli.github.com/):
+[GitHub CLI](https://cli.github.com/), where `ARCHIVE` is the file you downloaded:
 
 ```bash
-gh attestation verify git-rewind_0.1.1_linux_amd64.tar.gz --repo neomikhe/Git-Rewind
+gh attestation verify ARCHIVE --repo neomikhe/Git-Rewind
 ```
 
 **Requirements:** `git` 2.19 or newer on your `PATH` at runtime, and Go 1.26+ if you build
@@ -359,10 +358,9 @@ run stay exactly as you would type them.
 
 ## Status
 
-Pre-release and under active development. The engine, all eight rescues, both front ends,
-`find`, `explain`, `--json` and the Spanish translation work and are tested on Linux, macOS
-and Windows. The first tagged release is next, followed by Homebrew, Scoop, AUR and winget
-packages.
+Early releases (0.x), under active development. The engine, all eight rescues, both front
+ends, `find`, `explain`, `--json` and the Spanish translation work and are tested on Linux,
+macOS and Windows. Homebrew, Scoop, AUR and winget packages are next.
 
 ## License
 
